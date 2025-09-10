@@ -45,6 +45,12 @@ app.use('/auths', createProxyMiddleware({
     pathRewrite: (path, req) => req.originalUrl.replace(/^\/auths/, '/auths')
 }));
 
+app.use('/overview', createProxyMiddleware({
+    target: 'http://localhost:5006',
+    changeOrigin: true,
+    pathRewrite: (path, req) => req.originalUrl.replace(/^\/overview/, '/overview')
+}));
+
 
 // Root route for testing
 app.get('/', (req, res) => {
