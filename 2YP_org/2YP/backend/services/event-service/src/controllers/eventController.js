@@ -2,7 +2,6 @@
 // controllers/eventController.js
 
 // Correct import
-//abc
 const pool = require('../../../../db/db.js');
 
 // ==============================
