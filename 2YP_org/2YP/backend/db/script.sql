@@ -166,5 +166,13 @@ CREATE TABLE Admin (
     user_name VARCHAR(100) UNIQUE NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL
 );
-
 */
+
+
+-- Table to log building entry and exit events for analytics
+CREATE TABLE building_entry_logs (
+    log_id SERIAL PRIMARY KEY,
+    visitor_id VARCHAR(100) NOT NULL,
+    event_time TIMESTAMP NOT NULL,
+    event_type VARCHAR(10) CHECK (event_type IN ('entry', 'exit'))
+);

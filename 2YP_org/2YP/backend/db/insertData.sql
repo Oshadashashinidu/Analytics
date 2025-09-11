@@ -168,3 +168,12 @@ INSERT INTO Event_Tag (event_ID, tag_ID) VALUES
 (4, 3),
 (4, 4),
 (5, 5);
+
+
+INSERT INTO building_entry_logs (visitor_id, event_time, event_type) VALUES
+('visitor1', NOW() - INTERVAL '3 hours', 'entry'),
+('visitor1', NOW() - INTERVAL '2 hours 30 minutes', 'exit'),
+('visitor2', NOW() - INTERVAL '2 hours', 'entry'),
+('visitor3', NOW() - INTERVAL '1 hour', 'entry'),
+('visitor2', NOW() - INTERVAL '1 hour 20 minutes', 'exit'),
+('visitor4', NOW() - INTERVAL '45 minutes', 'entry');
