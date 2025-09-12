@@ -1,52 +1,39 @@
-// controllers/exportController.js
-const { generateAttendanceCSV } = require('../services/attendanceCSV');
-const { generateAttendancePDF } = require('../services/attendancePDF');
-const { generateAnalyticsExcel } = require('../services/analyticsExcel');
-const { generateAnalyticsPDF } = require('../services/analyticsPDF');
+const { generateAttendanceUsagePDF } = require('../services/attendanceUsagePDF');
+const { generateMovementFlowPDF } = require('../services/movementFlowPDF');
+const { generateSecurityExceptionPDF } = require('../services/securityExceptionPDF');
 
-// Attendance CSV
-const generateCSVReport = async (req, res) => {
-  try {
-    const file = await generateAttendanceCSV();
-    res.json({ message: "Attendance CSV generated", file });
-  } catch (err) {
-    res.status(500).json({ message: "Error generating CSV", error: err.message });
-  }
-};
-
-// Attendance PDF
+// Attendance & Usage PDF
 const generateAttendancePDFReport = async (req, res) => {
   try {
-    const file = await generateAttendancePDF();
-    res.json({ message: "Attendance PDF generated", file });
+    const file = await generateAttendanceUsagePDF();
+    res.json({ message: "Attendance & Usage PDF generated", file });
   } catch (err) {
-    res.status(500).json({ message: "Error generating Attendance PDF", error: err.message });
+    res.status(500).json({ message: "Error generating Attendance & Usage PDF", error: err.message });
   }
 };
 
-// Analytics Excel
-const generateAnalyticsExcelReport = async (req, res) => {
+// Movement & Flow PDF
+const generateMovementPDFReport = async (req, res) => {
   try {
-    const file = await generateAnalyticsExcel();
-    res.json({ message: "Analytics Excel generated", file });
+    const file = await generateMovementFlowPDF();
+    res.json({ message: "Movement & Flow PDF generated", file });
   } catch (err) {
-    res.status(500).json({ message: "Error generating Analytics Excel", error: err.message });
+    res.status(500).json({ message: "Error generating Movement & Flow PDF", error: err.message });
   }
 };
 
-// Analytics PDF
-const generateAnalyticsPDFReport = async (req, res) => {
+// Security & Exception PDF
+const generateSecurityPDFReport = async (req, res) => {
   try {
-    const file = await generateAnalyticsPDF();
-    res.json({ message: "Analytics PDF generated", file });
+    const file = await generateSecurityExceptionPDF();
+    res.json({ message: "Security & Exception PDF generated", file });
   } catch (err) {
-    res.status(500).json({ message: "Error generating Analytics PDF", error: err.message });
+    res.status(500).json({ message: "Error generating Security & Exception PDF", error: err.message });
   }
 };
 
 module.exports = {
-  generateCSVReport,
   generateAttendancePDFReport,
-  generateAnalyticsExcelReport,
-  generateAnalyticsPDFReport
+  generateMovementPDFReport,
+  generateSecurityPDFReport
 };

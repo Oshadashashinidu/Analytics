@@ -1,19 +1,14 @@
-// routes/exportRoutes.js
 const express = require('express');
 const router = express.Router();
 const {
-  generateCSVReport,
   generateAttendancePDFReport,
-  generateAnalyticsExcelReport,
-  generateAnalyticsPDFReport
+  generateMovementPDFReport,
+  generateSecurityPDFReport
 } = require('../controllers/exportController');
 
-// Attendance
-router.get('/attendance/csv', generateCSVReport);
+// Reports
 router.get('/attendance/pdf', generateAttendancePDFReport);
-
-// Analytics
-router.get('/analytics/excel', generateAnalyticsExcelReport);
-router.get('/analytics/pdf', generateAnalyticsPDFReport);
+router.get('/movement/pdf', generateMovementPDFReport);
+router.get('/security/pdf', generateSecurityPDFReport);
 
 module.exports = router;
