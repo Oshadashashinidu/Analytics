@@ -1,24 +1,30 @@
 const express = require("express");
 const {
-  getTop3Buildings,
-  getVisitorsInAllBuildings,
-  getAverageDurationMostPopular,
-  getRepeatVisitorsMostPopular
+  getTotalVisitors,
+  getTotalCheckIns,
+  getAverageDuration,
+  getRepeatVisitors,
+  getTop3Buildings
 } = require("../controllers/analyticsController");
 
 const router = express.Router();
 
+router.get("/total-visitors", getTotalVisitors);
+router.get("/total-checkins", getTotalCheckIns);
+router.get("/avg-duration", getAverageDuration);
+router.get("/repeat-visitors", getRepeatVisitors);
 router.get("/top3-buildings", getTop3Buildings);
-router.get("/visitors-all", getVisitorsInAllBuildings);
-router.get("/avg-duration-popular", getAverageDurationMostPopular);
-router.get("/repeat-visitors-popular", getRepeatVisitorsMostPopular);
 
 module.exports = router;
 
-//GET http://localhost:5006/analytics/top3-buildings?date=2025-09-10
+//API endpoints for testing:
 
-// GET http://localhost:5006/analytics/visitors-all?date=2025-09-10
+//GET http://localhost:5006/analytics/total-visitors?buildingId=B3&date=2025-09-23&slot=1
 
-// GET http://localhost:5006/analytics/avg-duration-popular?date=2025-09-10
+//GET http://localhost:5006/analytics/total-checkins?buildingId=B3&date=2025-09-23&slot=2
 
-// GET http://localhost:5006/analytics/repeat-visitors-popular?date=2025-09-10
+//GET http://localhost:5006/analytics/avg-duration?buildingId=B3&date=2025-09-23&slot=3
+
+//GET http://localhost:5006/analytics/repeat-visitors?buildingId=B3&date=2025-09-23&slot=1
+
+//GET http://localhost:5006/analytics/top3-buildings?date=2025-09-23&slot=2

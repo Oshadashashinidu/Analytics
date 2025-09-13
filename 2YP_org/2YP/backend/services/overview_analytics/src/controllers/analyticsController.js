@@ -1,34 +1,34 @@
 const analyticsService = require("../services/analyticsService");
 
-// 1. Top 3 buildings
-async function getTop3Buildings(req, res) {
+// 1. Total visitors in a building
+async function getTotalVisitors(req, res) {
   try {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
-    const data = await analyticsService.getTop3Buildings(date);
+    const { buildingId, date, slot } = req.query;
+    const data = await analyticsService.getTotalVisitors(buildingId, date, slot);
     res.json(data);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to fetch top 3 buildings" });
+    res.status(500).json({ error: "Failed to fetch total visitors" });
   }
 }
 
-// 2. Visitors in all buildings
-async function getVisitorsInAllBuildings(req, res) {
+// 2. Total check-ins
+async function getTotalCheckIns(req, res) {
   try {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
-    const data = await analyticsService.getVisitorsInAllBuildings(date);
+    const { buildingId, date, slot } = req.query;
+    const data = await analyticsService.getTotalCheckIns(buildingId, date, slot);
     res.json(data);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to fetch visitors in all buildings" });
+    res.status(500).json({ error: "Failed to fetch total check-ins" });
   }
 }
 
-// 3. Average duration in most popular building
-async function getAverageDurationMostPopular(req, res) {
+// 3. Average duration
+async function getAverageDuration(req, res) {
   try {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
-    const data = await analyticsService.getAverageDurationMostPopular(date);
+    const { buildingId, date, slot } = req.query;
+    const data = await analyticsService.getAverageDuration(buildingId, date, slot);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -36,11 +36,11 @@ async function getAverageDurationMostPopular(req, res) {
   }
 }
 
-// 4. Repeat visitors in most popular building
-async function getRepeatVisitorsMostPopular(req, res) {
+// 4. Repeat visitors
+async function getRepeatVisitors(req, res) {
   try {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
-    const data = await analyticsService.getRepeatVisitorsMostPopular(date);
+    const { buildingId, date, slot } = req.query;
+    const data = await analyticsService.getRepeatVisitors(buildingId, date, slot);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -48,9 +48,22 @@ async function getRepeatVisitorsMostPopular(req, res) {
   }
 }
 
+// 5. Top 3 buildings
+async function getTop3Buildings(req, res) {
+  try {
+    const { date, slot } = req.query;
+    const data = await analyticsService.getTop3Buildings(date, slot);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch top 3 buildings" });
+  }
+}
+
 module.exports = {
-  getTop3Buildings,
-  getVisitorsInAllBuildings,
-  getAverageDurationMostPopular,
-  getRepeatVisitorsMostPopular
+  getTotalVisitors,
+  getTotalCheckIns,
+  getAverageDuration,
+  getRepeatVisitors,
+  getTop3Buildings
 };

@@ -1,33 +1,33 @@
--- ========================
--- INSERT TEST DATA
--- ========================
+-- ============================================
+-- Insert Data for BUILDING Table
+-- ============================================
 
--- 1. Insert buildings
-INSERT INTO Building (building_id, dept_name) VALUES
-(1, 'Computer Science'),
-(2, 'Electrical Engineering'),
-(3, 'Mechanical Engineering');
+INSERT INTO BUILDING (building_id, Dept_Name, total_count) VALUES
+('A22', 'Drawing Office 2', 1),
+('A25', 'Structures Laboratory', 0),
+('B1', 'Department of Chemical and Process Engineering', 0),
+('B2', 'Mathematics/Management/Computing Centre', 0),
+('B3', 'Drawing Office 1', 0),
+('C10', 'Electrical and Electronic Workshop', 0),
+('C11/C12', 'Surveying/Soil Lab', 0),
+('C13', 'Materials Lab', 0),
+('C14', 'Environmental Lab', 0),
+('C8', 'Department of Electrical and Electronic Engineering', 0),
+('C9', 'Department of Computer Engineering', 0),
+('D15', 'Fluids Lab', 0),
+('D16/D17', 'New/Applied Mechanics Labs', 0),
+('D18', 'Thermodynamics Lab', 0),
+('D20/D21', 'Engineering Workshop/Engineering Carpentry Shop', 0),
+('D28', 'Department of Manufacturing and Industrial Engineering', 0);
 
--- 2. Insert QR codes
-INSERT INTO QR_Code (qr_id, qr_value, issue_date, status) VALUES
-(1, 'QR001', '2025-09-10', 'Active'),
-(2, 'QR002', '2025-09-10', 'Active'),
-(3, 'QR003', '2025-09-10', 'Active'),
-(4, 'QR004', '2025-09-10', 'Expired'),
-(5, 'QR005', '2025-09-10', 'Active');
 
--- 3. Insert persons
-INSERT INTO Person (person_id, name, qr_id, contact_info) VALUES
-(1, 'Alice Johnson', 1, 'alice@example.com'),
-(2, 'Bob Smith', 2, 'bob@example.com'),
-(3, 'Charlie Brown', 3, 'charlie@example.com'),
-(4, 'Diana White', 4, 'diana@example.com'),
-(5, 'Ethan Green', 5, 'ethan@example.com');
+-- ============================================
+-- Insert Data for EntryExitLog Table
+-- ============================================
 
--- 4. Insert EntryExit logs
-INSERT INTO EntryExitLog (log_id, qr_id, building_id, entry_time, exit_time) VALUES
-(6, 1, 1, '2025-09-10 08:00:00+05:30', '2025-09-10 12:00:00+05:30'),
-(7, 2, 1, '2025-09-10 09:15:00+05:30', '2025-09-10 10:45:00+05:30'),
-(8, 3, 2, '2025-09-10 10:00:00+05:30', '2025-09-10 11:30:00+05:30'),
-(9, 4, 3, '2025-09-10 08:30:00+05:30', '2025-09-10 12:15:00+05:30'),
-(10, 5, 2, '2025-09-10 07:45:00+05:30', '2025-09-10 09:30:00+05:30');
+INSERT INTO EntryExitLog (tag_id, building_id, entry_time, exit_time) VALUES
+(1, 'A22', '2025-09-23 10:15:20', '2025-09-23 12:45:35'),
+(2, 'B1',  '2025-09-23 11:05:10', '2025-09-23 13:40:50'),
+(3, 'B2',  '2025-09-23 14:20:00', '2025-09-23 16:10:45'),
+(4, 'B3',  '2025-09-23 15:05:15', '2025-09-23 16:30:25'),
+(5, 'B3',  '2025-09-23 17:45:30', '2025-09-23 18:25:40');
