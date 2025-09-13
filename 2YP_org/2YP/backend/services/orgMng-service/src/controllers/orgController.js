@@ -100,7 +100,6 @@ const deleteOrganizer = async (req, res) => {
 module.exports = {
     getOrganizers,
     getOrganizerById,
-    createOrganizer,
     updateOrganizer,
     deleteOrganizer
 };
