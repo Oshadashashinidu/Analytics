@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
 const pool = require("../../../../db/db.js"); // adjust as needed
+const { getDateForDay } = require("../utils/dates");
 
 const CHART_WIDTH = 700;
 const CHART_HEIGHT = 320;
@@ -81,25 +82,31 @@ function drawSimpleTable(doc, headers, rows, startX, startY, totalWidth) {
   return y;
 }
 
-async function generateAttendanceUsagePDF() {
+async function generateAttendanceUsagePDF({ day } = {}) {
   try {
+    // Optional date filter derived from exhibition start (2025-09-10 .. 2025-09-14)
+    const filterDate = day ? getDateForDay(day) : null;
+    const whereDay = filterDate ? `WHERE DATE(e.entry_time) = $1::date` : '';
+    const params = filterDate ? [filterDate] : [];
     // ---- Queries ----
     // Total visits per building (count of rows)
     const totalVisitsRes = await pool.query(`
       SELECT b.dept_name, b.building_id, COUNT(*)::int AS visits
       FROM EntryExitLog e
       JOIN Building b ON e.building_id = b.building_id
+      ${whereDay}
       GROUP BY b.dept_name, b.building_id
       ORDER BY visits DESC;
-    `);
+    `, params);
 
     // Unique visitors per building
     const uniqueVisitorsRes = await pool.query(`
       SELECT b.dept_name, b.building_id, COUNT(DISTINCT e.tag_id)::int AS unique_visitors
       FROM EntryExitLog e
       JOIN Building b ON e.building_id = b.building_id
+      ${whereDay}
       GROUP BY b.dept_name, b.building_id;
-    `);
+    `, params);
 
     // Avg duration per building (minutes)
     const avgTimeRes = await pool.query(`
@@ -107,46 +114,52 @@ async function generateAttendanceUsagePDF() {
       FROM EntryExitLog e
       JOIN Building b ON e.building_id = b.building_id
       WHERE e.exit_time IS NOT NULL
+      ${day ? 'AND DATE(e.entry_time) = $1::date' : ''}
       GROUP BY b.dept_name, b.building_id;
-    `);
+    `, params);
 
     // Peak entry times (hourly distribution)
     const peakHourRes = await pool.query(`
       SELECT EXTRACT(HOUR FROM entry_time)::int AS hour, COUNT(*)::int AS entries
-      FROM EntryExitLog
+      FROM EntryExitLog e
+      ${whereDay}
       GROUP BY hour
       ORDER BY hour ASC;
-    `);
+    `, params);
 
     // Repeat visits (tag_id with count > 1)
     const repeatVisitsRes = await pool.query(`
       SELECT tag_id, COUNT(*)::int AS visits
-      FROM EntryExitLog
+      FROM EntryExitLog e
+      ${whereDay}
       GROUP BY tag_id
       HAVING COUNT(*) > 1
       ORDER BY visits DESC;
-    `);
+    `, params);
 
     // Repeat visits (same tag_id multiple times, with building and entry_time)
     const repeatVisitsDetailRes = await pool.query(`
       SELECT tag_id, building_id, entry_time
-      FROM EntryExitLog
-      WHERE tag_id IN (
+      FROM EntryExitLog e
+      ${whereDay}
+      AND tag_id IN (
         SELECT tag_id
         FROM EntryExitLog
+        ${whereDay.replace('WHERE','WHERE')}
         GROUP BY tag_id
         HAVING COUNT(*) > 1
       )
       ORDER BY tag_id, entry_time;
-    `);
+    `, params);
 
     // Zone heatmap: map first char of building_id as zone
     const zoneHeatmapRes = await pool.query(`
       SELECT SUBSTRING(building_id,1,1) AS zone, COUNT(*)::int AS visits
-      FROM EntryExitLog
+      FROM EntryExitLog e
+      ${whereDay}
       GROUP BY zone
       ORDER BY visits DESC;
-    `);
+    `, params);
 
     // Visitors per time slot (slots defined)
     const slotVisitsRes = await pool.query(`
@@ -159,11 +172,12 @@ async function generateAttendanceUsagePDF() {
            WHEN entry_time::time >= '16:00'::time AND entry_time::time < '19:00'::time THEN '16-19'
            ELSE 'other'
          END AS slot
-        FROM EntryExitLog
+        FROM EntryExitLog e
+        ${whereDay}
       ) s
       GROUP BY slot
       ORDER BY slot;
-    `);
+    `, params);
 
     // ---- Prepare metrics ----
     const totalVisits = totalVisitsRes.rows || [];
@@ -313,7 +327,7 @@ async function generateAttendanceUsagePDF() {
 
     // ---- Build PDF ----
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `attendance_usage_${timestamp}.pdf`;
+    const filename = `attendance_usage${day ? `_day${day}` : ''}_${timestamp}.pdf`;
     const exportsDir = path.join(__dirname, "../../exports");
     if (!fs.existsSync(exportsDir)) fs.mkdirSync(exportsDir, { recursive: true });
     const filepath = path.join(exportsDir, filename);
@@ -322,7 +336,7 @@ async function generateAttendanceUsagePDF() {
     const stream = fs.createWriteStream(filepath);
     doc.pipe(stream);
 
-    doc.fontSize(20).fillColor("#0b4b8a").text("Attendance & Usage Report", { align: "left" });
+    doc.fontSize(20).fillColor("#0b4b8a").text(`Attendance & Usage Report${day ? ` - Day ${day}` : ''}` , { align: "left" });
     doc.fontSize(10).fillColor("#666").text(`Generated: ${new Date().toLocaleString()}`, { align: "left" });
     doc.moveDown();
 
