@@ -9,10 +9,10 @@ const pool = require('../../../../db/db.js'); // PostgreSQL connection pool
 // ======================
 const register = async (req, res) => {
     try {
-        const { organizer_name, Fname, Lname, email, contact_no, password } = req.body;
+        const { fname, lname, email, contact_no, password } = req.body;
 
-        if (!Fname || !Lname || !email || !password) {
-            return res.status(400).json({ message: "Fname, Lname, Email (username) and Password are required" });
+        if (!fname || !lname || !email || !password) {
+            return res.status(400).json({ message: "fname, lname, Email (username) and Password are required" });
         }
 
         // Check if email (username) already exists
@@ -21,15 +21,18 @@ const register = async (req, res) => {
             return res.status(400).json({ message: "Email (username) already registered" });
         }
 
+        // Generate organizer_name from fname and lname
+        const organizer_name = `${fname} ${lname}`;
+
         // Hash password
         const password_hash = await bcrypt.hash(password, 10);
 
         // Insert new organizer
         const result = await pool.query(
-            `INSERT INTO Organizer (organizer_name, Fname, Lname, email, contact_no, password_hash)
+            `INSERT INTO Organizer (organizer_name, fname, lname, email, contact_no, password_hash)
              VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING organizer_ID, organizer_name, Fname, Lname, email AS username, contact_no`,
-            [organizer_name || null, Fname, Lname, email, contact_no || null, password_hash]
+             RETURNING organizer_ID, organizer_name, fname, lname, email AS username, contact_no`,
+            [organizer_name, fname, lname, email, contact_no || null, password_hash]
         );
 
         res.status(201).json({ 
