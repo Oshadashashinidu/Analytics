@@ -1,7 +1,7 @@
 // src/services/attendanceUsageCSV.js
 const fs = require("fs");
 const path = require("path");
-const pool = require("../../../../db/db.js"); // adjust as needed
+const pool = require("../utils/db1.js"); // adjust as needed
 const { getDateForDay } = require("../utils/dates");
 const { Parser } = require("json2csv");
 
@@ -26,8 +26,8 @@ async function generateAttendanceUsageCSV({ day } = {}) {
     // Total visits per building (count of rows)
     const totalVisitsRes = await pool.query(`
       SELECT b.dept_name, b.building_id, COUNT(*)::int AS visits
-      FROM EntryExitLog e
-      JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      JOIN "BUILDING" b ON e.building_id = b.building_id
       ${whereDay}
       GROUP BY b.dept_name, b.building_id
       ORDER BY visits DESC;
@@ -36,8 +36,8 @@ async function generateAttendanceUsageCSV({ day } = {}) {
     // Unique visitors per building
     const uniqueVisitorsRes = await pool.query(`
       SELECT b.dept_name, b.building_id, COUNT(DISTINCT e.tag_id)::int AS unique_visitors
-      FROM EntryExitLog e
-      JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      JOIN "BUILDING" b ON e.building_id = b.building_id
       ${whereDay}
       GROUP BY b.dept_name, b.building_id;
     `, params);
@@ -45,8 +45,8 @@ async function generateAttendanceUsageCSV({ day } = {}) {
     // Avg duration per building (minutes)
     const avgTimeRes = await pool.query(`
       SELECT b.dept_name, b.building_id, AVG(EXTRACT(EPOCH FROM (e.exit_time - e.entry_time))/60)::numeric(10,2) AS avg_minutes
-      FROM EntryExitLog e
-      JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      JOIN "BUILDING" b ON e.building_id = b.building_id
       WHERE e.exit_time IS NOT NULL
       ${day ? 'AND DATE(e.entry_time) = $1::date' : ''}
       GROUP BY b.dept_name, b.building_id;
@@ -55,7 +55,7 @@ async function generateAttendanceUsageCSV({ day } = {}) {
     // Peak entry times (hourly distribution)
     const peakHourRes = await pool.query(`
       SELECT EXTRACT(HOUR FROM entry_time)::int AS hour, COUNT(*)::int AS entries
-      FROM EntryExitLog e
+      FROM "EntryExitLog" e
       ${whereDay}
       GROUP BY hour
       ORDER BY hour ASC;
@@ -64,7 +64,7 @@ async function generateAttendanceUsageCSV({ day } = {}) {
     // Repeat visits (tag_id with count > 1)
     const repeatVisitsRes = await pool.query(`
       SELECT tag_id, COUNT(*)::int AS visits
-      FROM EntryExitLog e
+      FROM "EntryExitLog" e
       ${whereDay}
       GROUP BY tag_id
       HAVING COUNT(*) > 1
@@ -74,11 +74,11 @@ async function generateAttendanceUsageCSV({ day } = {}) {
     // Repeat visits (same tag_id multiple times, with building and entry_time)
     const repeatVisitsDetailRes = await pool.query(`
       SELECT tag_id, building_id, entry_time
-      FROM EntryExitLog e
+      FROM "EntryExitLog" e
       ${whereDay}
       AND tag_id IN (
         SELECT tag_id
-        FROM EntryExitLog
+        FROM "EntryExitLog"
         ${whereDay.replace('WHERE','WHERE')}
         GROUP BY tag_id
         HAVING COUNT(*) > 1
@@ -89,7 +89,7 @@ async function generateAttendanceUsageCSV({ day } = {}) {
     // Zone heatmap: map first char of building_id as zone
     const zoneHeatmapRes = await pool.query(`
       SELECT SUBSTRING(building_id::text,1,1) AS zone, COUNT(*)::int AS visits
-      FROM EntryExitLog e
+      FROM "EntryExitLog" e
       ${whereDay}
       GROUP BY zone
       ORDER BY visits DESC;
@@ -106,7 +106,7 @@ async function generateAttendanceUsageCSV({ day } = {}) {
            WHEN entry_time::time >= '16:00'::time AND entry_time::time < '19:00'::time THEN '16-19'
            ELSE 'other'
          END AS slot
-        FROM EntryExitLog e
+        FROM "EntryExitLog" e
         ${whereDay}
       ) s
       GROUP BY slot
@@ -219,13 +219,13 @@ async function generateAttendanceUsageCSV({ day } = {}) {
     // Write to file
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `attendance_usage${day ? `_day${day}` : ''}_${timestamp}.csv`;
-    const exportsDir = path.join(__dirname, "../../exports");
+    const exportsDir = path.resolve(__dirname, "..", "..", "exports");
     if (!fs.existsSync(exportsDir)) fs.mkdirSync(exportsDir, { recursive: true });
     const filepath = path.join(exportsDir, filename);
 
     fs.writeFileSync(filepath, csv);
 
-    return filename;
+    return filepath;
   } catch (err) {
     console.error("Error generating Attendance & Usage CSV:", err);
     throw err;

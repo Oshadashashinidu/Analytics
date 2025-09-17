@@ -7,7 +7,7 @@ const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
 // app.js or server.js
 require('chartjs-chart-matrix');
 
-const pool = require("../../../../db/db.js"); 
+const pool = require("../utils/db1.js");
 const { getDateForDay } = require("../utils/dates");
 
 const CHART_WIDTH = 900;
@@ -37,7 +37,7 @@ async function generateMovementFlowPDF({ day } = {}) {
           END AS slot,
           1 AS entry_count,
           0 AS exit_count
-        FROM EntryExitLog
+        FROM "EntryExitLog"
         WHERE entry_time IS NOT NULL
         ${day ? 'AND DATE(entry_time) = $1::date' : ''}
         UNION ALL
@@ -50,7 +50,7 @@ async function generateMovementFlowPDF({ day } = {}) {
           END AS slot,
           0 AS entry_count,
           1 AS exit_count
-        FROM EntryExitLog
+        FROM "EntryExitLog"
         WHERE exit_time IS NOT NULL
         ${day ? 'AND DATE(exit_time) = $1::date' : ''}
       ) e
@@ -62,7 +62,7 @@ async function generateMovementFlowPDF({ day } = {}) {
       WITH ordered AS (
         SELECT tag_id, building_id, entry_time,
                ROW_NUMBER() OVER (PARTITION BY tag_id ORDER BY entry_time) rn
-        FROM EntryExitLog
+        FROM "EntryExitLog"
         WHERE entry_time IS NOT NULL
         ${day ? 'AND DATE(entry_time) = $1::date' : ''}
       ),
@@ -83,8 +83,8 @@ async function generateMovementFlowPDF({ day } = {}) {
 
     const busiestBuildingsRes = await pool.query(`
       SELECT b.dept_name, e.building_id, COUNT(*)::int AS entries
-      FROM EntryExitLog e
-      JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      JOIN "BUILDING" b ON e.building_id = b.building_id
       ${day ? 'WHERE DATE(e.entry_time) = $1::date' : ''}
       GROUP BY b.dept_name, e.building_id
       ORDER BY entries DESC
@@ -94,7 +94,7 @@ async function generateMovementFlowPDF({ day } = {}) {
     const busiestZonesRes = await pool.query(`
       SELECT zone, COUNT(DISTINCT tag_id)::int AS unique_visitors
       FROM (
-        SELECT tag_id, SUBSTRING(building_id::text,1,1) AS zone FROM EntryExitLog
+        SELECT tag_id, SUBSTRING(building_id::text,1,1) AS zone FROM "EntryExitLog"
         WHERE building_id IS NOT NULL
         ${day ? 'AND DATE(entry_time) = $1::date' : ''}
       ) s
@@ -106,7 +106,7 @@ async function generateMovementFlowPDF({ day } = {}) {
       SELECT AVG(cnt)::numeric(10,2) AS avg_buildings
       FROM (
         SELECT tag_id, COUNT(DISTINCT building_id) AS cnt
-        FROM EntryExitLog
+        FROM "EntryExitLog"
         GROUP BY tag_id
       ) t;
     `);
