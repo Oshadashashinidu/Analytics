@@ -1,71 +1,112 @@
 const pool = require('../utils/db');
 
-const getPeakOccupancy = async (hours, zone, building) => {
-  // Example SQL to get peak occupancy in given interval and location
-  const intervalHours = parseInt(hours, 10);
+function validateDuration(durationHours) {
+  const hours = parseInt(durationHours, 10);
+  if (isNaN(hours) || hours <= 0 || hours > 168) return 24;
+  return hours;
+}
+
+async function getPeakOccupancyByZone(durationHours, zone) {
+  const hours = validateDuration(durationHours);
   const query = `
-    SELECT MAX(occupancy) AS peak
-    FROM (
-      SELECT DATE_TRUNC('hour', event_time) AS hour,
-        COUNT(DISTINCT visitor_id) AS occupancy
-      FROM building_entry_logs
-      WHERE zone = $1 AND building = $2 AND event_time >= NOW() - INTERVAL '${intervalHours} hours'
-      GROUP BY hour
-    ) sub;
+    WITH events AS (
+      SELECT "entry_time" AS event_time,
+        CASE WHEN "direction" = 'entry' THEN 1 ELSE -1 END AS change,
+        "building_id" AS building
+      FROM "EntryExitLog"
+      WHERE "building_id" IN (
+        SELECT "building_id" FROM "BUILDING" WHERE "dept_name" = $1
+      )
+      AND "entry_time" >= NOW() - INTERVAL '${hours} hours'
+    ),
+    runningsum AS (
+      SELECT event_time,
+        building,
+        SUM(change) OVER (PARTITION BY building ORDER BY event_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS occupancy
+      FROM events
+    )
+    SELECT building,
+      COALESCE(MAX(occupancy), 0) AS peak_occupancy
+    FROM runningsum
+    GROUP BY building
+    ORDER BY building;
   `;
-  const { rows } = await pool.query(query, [zone, building]);
-  return rows[0].peak || 0;
-};
 
-const getAvgDwellTime = async (hours, zone, building) => {
-  const intervalHours = parseInt(hours, 10);
+  const { rows } = await pool.query(query, [zone]);
+  if (!rows.length) {
+    return [{ building: null, peak_occupancy: 0 }];
+  }
+  return rows;
+}
 
-  // Average dwell time in minutes calculated from entry/exit pairs per visitor
+async function getAvgDwellTimeByZone(durationHours, zone) {
+  const hours = validateDuration(durationHours);
   const query = `
     WITH visits AS (
-      SELECT visitor_id,
-         MIN(event_time) FILTER (WHERE event_type = 'entry') AS entry_time,
-         MAX(event_time) FILTER (WHERE event_type = 'exit') AS exit_time
-      FROM building_entry_logs
-      WHERE zone = $1 AND building = $2 AND event_time >= NOW() - INTERVAL '${intervalHours} hours'
-      GROUP BY visitor_id
+      SELECT "tag_id",
+        "building_id" AS building,
+        MIN("entry_time") AS entry_time,
+        MAX("exit_time") AS exit_time
+      FROM "EntryExitLog"
+      WHERE "building_id" IN (
+        SELECT "building_id" FROM "BUILDING" WHERE "dept_name" = $1
+      )
+      AND "entry_time" >= NOW() - INTERVAL '${hours} hours'
+      GROUP BY "tag_id", "building_id"
     )
-    SELECT AVG(EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60) AS avg_dwell_minutes
+    SELECT building,
+      COALESCE(AVG(EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60), 0) AS avg_dwell_minutes
     FROM visits
-    WHERE entry_time IS NOT NULL AND exit_time IS NOT NULL;
+    WHERE entry_time IS NOT NULL AND exit_time IS NOT NULL
+    GROUP BY building
+    ORDER BY building;
   `;
-  const { rows } = await pool.query(query, [zone, building]);
-  return parseFloat(rows[0].avg_dwell_minutes) || 0;
-};
 
-const getActivityLevel = async (hours) => {
-  const intervalHours = parseInt(hours, 10);
+  const { rows } = await pool.query(query, [zone]);
+  if (!rows.length) {
+    return [{ building: null, avg_dwell_minutes: 0 }];
+  }
+  return rows;
+}
 
+async function getActivityLevelByZone(durationHours, zone) {
+  const hours = validateDuration(durationHours);
   const query = `
-    SELECT COUNT(DISTINCT visitor_id) AS unique_visitors,
-           COUNT(*) FILTER (WHERE event_type='entry') AS entries,
-           COUNT(*) FILTER (WHERE event_type='exit') AS exits
-    FROM building_entry_logs
-    WHERE event_time >= NOW() - INTERVAL '${intervalHours} hours';
+    SELECT "building_id" AS building,
+      COUNT(DISTINCT "tag_id") AS unique_visitors,
+      COUNT(*) FILTER (WHERE "direction" = 'entry') AS entries,
+      COUNT(*) FILTER (WHERE "direction" = 'exit') AS exits
+    FROM "EntryExitLog"
+    WHERE "building_id" IN (
+      SELECT "building_id" FROM "BUILDING" WHERE "dept_name" = $1
+    )
+    AND "entry_time" >= NOW() - INTERVAL '${hours} hours'
+    GROUP BY "building_id"
+    ORDER BY "building_id";
   `;
 
-  const { rows } = await pool.query(query);
-
-  const visitors = parseInt(rows[0].unique_visitors, 10);
+  const { rows } = await pool.query(query, [zone]);
+  if (!rows.length) {
+    return {
+      activity_level: 'Low',
+      total_unique_visitors: 0,
+      details_per_building: []
+    };
+  }
+  const totalVisitors = rows.reduce((a, r) => a + parseInt(r.unique_visitors, 10), 0);
   let level = 'Low';
-  if (visitors > 50) level = 'High';
-  else if (visitors > 20) level = 'Medium';
+  if (totalVisitors > 150) level = 'High';
+  else if (totalVisitors > 80) level = 'Medium';
 
   return {
-    unique_visitors: visitors,
-    entries: parseInt(rows[0].entries, 10),
-    exits: parseInt(rows[0].exits, 10),
     activity_level: level,
+    total_unique_visitors: totalVisitors,
+    details_per_building: rows,
   };
-};
+}
 
 module.exports = {
-  getPeakOccupancy,
-  getAvgDwellTime,
-  getActivityLevel,
+  getPeakOccupancyByZone,
+  getAvgDwellTimeByZone,
+  getActivityLevelByZone,
 };
