@@ -59,11 +59,68 @@ async function getTop3Buildings(req, res) {
     res.status(500).json({ error: "Failed to fetch top 3 buildings" });
   }
 }
+// 6. Visitors per building for a slot (bar chart)
+async function getVisitorsPerBuilding(req, res) {
+  try {
+    const { date, slot } = req.query;
+    const data = await analyticsService.getVisitorsPerBuilding(date, slot);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch visitors per building" });
+  }
+}
+
+
+
+
+
+// Visitors Growth
+async function getVisitorsGrowth(req, res) {
+  try {
+    const { buildingId, date, slot } = req.query;
+    const data = await analyticsService.getVisitorsGrowth(buildingId, date, slot);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch visitors growth" });
+  }
+}
+
+// Check-ins Growth
+async function getCheckInsGrowth(req, res) {
+  try {
+    const { buildingId, date, slot } = req.query;
+    const data = await analyticsService.getCheckInsGrowth(buildingId, date, slot);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch check-ins growth" });
+  }
+}
+
+// Avg Duration Growth
+async function getAvgDurationGrowth(req, res) {
+  try {
+    const { buildingId, date, slot } = req.query;
+    const data = await analyticsService.getAvgDurationGrowth(buildingId, date, slot);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch avg duration growth" });
+  }
+}
+
+
 
 module.exports = {
   getTotalVisitors,
   getTotalCheckIns,
   getAverageDuration,
   getRepeatVisitors,
-  getTop3Buildings
+  getTop3Buildings,
+  getVisitorsPerBuilding,
+  getVisitorsGrowth,
+  getCheckInsGrowth,
+  getAvgDurationGrowth
 };

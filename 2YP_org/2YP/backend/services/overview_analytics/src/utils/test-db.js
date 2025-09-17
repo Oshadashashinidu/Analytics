@@ -7,13 +7,13 @@ const client = new Client({
 
 client.connect()
   .then(() => {
-    console.log("✅ Connected to Supabase!");
+    console.log(" Connected to Supabase!");
     return client.query("SELECT NOW()");
   })
   .then(res => {
     console.log("Server time:", res.rows[0]);
   })
   .catch(err => {
-    console.error("❌ Connection error:", err);
+    console.error("Connection error:", err);
   })
   .finally(() => client.end());
