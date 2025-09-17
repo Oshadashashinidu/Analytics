@@ -23,7 +23,7 @@ async function getTotalVisitors(buildingId, date, slot) {
   const { start, end } = getSlotRange(date, slot);
   const query = `
     SELECT COUNT(DISTINCT tag_id) AS total_visitors
-    FROM EntryExitLog
+    FROM "EntryExitLog"
     WHERE building_id = $1 AND entry_time >= $2 AND entry_time < $3
   `;
   const { rows } = await db.query(query, [buildingId, start, end]);
@@ -35,7 +35,7 @@ async function getTotalCheckIns(buildingId, date, slot) {
   const { start, end } = getSlotRange(date, slot);
   const query = `
     SELECT COUNT(*) AS total_checkins
-    FROM EntryExitLog
+    FROM "EntryExitLog"
     WHERE building_id = $1 AND entry_time >= $2 AND entry_time < $3
   `;
   const { rows } = await db.query(query, [buildingId, start, end]);
@@ -47,7 +47,7 @@ async function getAverageDuration(buildingId, date, slot) {
   const { start, end } = getSlotRange(date, slot);
   const query = `
     SELECT EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60 AS duration
-    FROM EntryExitLog
+    FROM "EntryExitLog"
     WHERE building_id = $1 
       AND entry_time >= $2 AND entry_time < $3
       AND exit_time IS NOT NULL
@@ -66,7 +66,7 @@ async function getRepeatVisitors(buildingId, date, slot) {
   const { start, end } = getSlotRange(date, slot);
   const query = `
     SELECT tag_id, COUNT(*) AS visits
-    FROM EntryExitLog
+    FROM "EntryExitLog"
     WHERE building_id = $1 AND entry_time >= $2 AND entry_time < $3
     GROUP BY tag_id
   `;
@@ -87,8 +87,8 @@ async function getTop3Buildings(date, slot) {
   const { start, end } = getSlotRange(date, slot);
   const query = `
     SELECT b.dept_name AS building, COUNT(DISTINCT e.tag_id) AS visitors
-    FROM EntryExitLog e
-    JOIN Building b ON e.building_id = b.building_id
+    FROM "EntryExitLog" e
+    JOIN "BUILDING" b ON e.building_id = b.building_id
     WHERE e.entry_time >= $1 AND e.entry_time < $2
     GROUP BY b.dept_name
     ORDER BY visitors DESC
