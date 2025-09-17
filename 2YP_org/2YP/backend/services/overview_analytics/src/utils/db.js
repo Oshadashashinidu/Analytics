@@ -6,6 +6,13 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }, // Required for Supabase
 });
 
-pool.on("connect", () => console.log(" Connected to Supabase"));
+// Log when connected
+pool.on("connect", () => console.log("Connected to Supabase"));
+
+// Handle unexpected errors on idle clients
+pool.on("error", (err, client) => {
+  console.error("Unexpected error on idle client", err);
+  // Optionally: alert or log for monitoring
+});
 
 module.exports = pool;
