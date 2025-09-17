@@ -1,44 +1,62 @@
 const heatmapService = require('../services/heatmapService');
 
 const getPeakOccupancy = async (req, res) => {
+  const { hours, zone } = req.query;
+  if(!hours || !zone) return res.status(400).json({ error: 'Missing query parameters: hours and zone are required.' });
+  
   try {
-    const { hours, zone, building } = req.query;
-    if (!hours || !zone || !building) {
-      return res.status(400).json({ error: 'Missing required query parameters: hours, zone, building' });
-    }
-    const peakOccupancy = await heatmapService.getPeakOccupancy(hours, zone, building);
-    res.json({ peak_occupancy: peakOccupancy });
-  } catch (error) {
-    console.error(error);
+    const data = await heatmapService.getPeakOccupancyByZone(hours, zone);
+    res.json(data);
+  } catch (err) {
+    console.error('Error fetching peak occupancy:', err);
     res.status(500).json({ error: 'Failed to fetch peak occupancy' });
   }
 };
 
 const getAvgDwellTime = async (req, res) => {
+  const { hours, zone } = req.query;
+  if(!hours || !zone) return res.status(400).json({ error: 'Missing query parameters: hours and zone are required.' });
+
   try {
-    const { hours, zone, building } = req.query;
-    if (!hours || !zone || !building) {
-      return res.status(400).json({ error: 'Missing required query parameters: hours, zone, building' });
-    }
-    const avgDwell = await heatmapService.getAvgDwellTime(hours, zone, building);
-    res.json({ avg_dwell_time_minutes: avgDwell });
-  } catch (error) {
-    console.error(error);
+    const data = await heatmapService.getAvgDwellTimeByZone(hours, zone);
+    res.json(data);
+  } catch (err) {
+    console.error('Error fetching avg dwell time:', err);
     res.status(500).json({ error: 'Failed to fetch average dwell time' });
   }
 };
 
 const getActivityLevel = async (req, res) => {
+  const { hours, zone } = req.query;
+  if(!hours || !zone) return res.status(400).json({ error: 'Missing query parameters: hours and zone are required.' });
+
   try {
-    const { hours } = req.query;
-    if (!hours) {
-      return res.status(400).json({ error: 'Missing required query parameter: hours' });
-    }
-    const level = await heatmapService.getActivityLevel(hours);
-    res.json(level);
-  } catch (error) {
-    console.error(error);
+    const data = await heatmapService.getActivityLevelByZone(hours, zone);
+    res.json(data);
+  } catch (err) {
+    console.error('Error fetching activity level:', err);
     res.status(500).json({ error: 'Failed to fetch activity level' });
+  }
+};
+
+const getAllAnalytics = async (req, res) => {
+  const { hours, zone } = req.query;
+  if (!hours || !zone) return res.status(400).json({ error: 'Missing query parameters: hours and zone are required.' });
+
+  try {
+    const [peakOccupancy, avgDwellTime, activityLevel] = await Promise.all([
+      heatmapService.getPeakOccupancyByZone(hours, zone),
+      heatmapService.getAvgDwellTimeByZone(hours, zone),
+      heatmapService.getActivityLevelByZone(hours, zone)
+    ]);
+    res.json({
+      peak_occupancy: peakOccupancy,
+      avg_dwell_time: avgDwellTime,
+      activity_level: activityLevel,
+    });
+  } catch (err) {
+    console.error('Error fetching all analytics:', err);
+    res.status(500).json({ error: 'Failed to fetch all analytics' });
   }
 };
 
@@ -46,4 +64,5 @@ module.exports = {
   getPeakOccupancy,
   getAvgDwellTime,
   getActivityLevel,
+  getAllAnalytics
 };
