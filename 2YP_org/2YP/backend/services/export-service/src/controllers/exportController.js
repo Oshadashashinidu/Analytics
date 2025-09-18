@@ -1,3 +1,6 @@
+const path = require("path");
+const fs = require("fs");
+
 const { generateAttendanceUsagePDF } = require('../services/attendanceUsagePDF');
 const { generateMovementFlowPDF } = require('../services/movementFlowPDF');
 const { generateSecurityExceptionPDF } = require('../services/securityExceptionPDF');
@@ -7,16 +10,33 @@ const { generateMovementFlowCSV } = require('../services/movementFlowCSV');
 
 const { generateEventPDF } = require("../services/eventSummaryPDF");
 
+// Helper to get correct file path
+const resolveFilePath = (filename) => {
+  // If filename is absolute, use it as is
+  if (path.isAbsolute(filename)) return filename;
+  // Otherwise, resolve relative to export-service/exports
+  return path.join(__dirname, "..", "..", "exports", filename);
+};
+
 // ---------------- Attendance & Usage ----------------
 const generateAttendancePDFReport = async (req, res) => {
   try {
     const dayParam = req.params.day ? Number(req.params.day) : undefined;
-    if (dayParam !== undefined && (!Number.isFinite(dayParam) || dayParam < 1 || dayParam > 5)) {
+    if (dayParam !== undefined && (dayParam < 1 || dayParam > 5)) {
       return res.status(400).send("Invalid day. Allowed values are 1-5.");
     }
-    const file = await generateAttendanceUsagePDF({ day: dayParam });
-    res.json({ message: "Attendance & Usage PDF generated", file });
+
+    const filename = await generateAttendanceUsagePDF({ day: dayParam });
+    const filePath = resolveFilePath(filename);
+
+    if (!fs.existsSync(filePath)) {
+      console.error("File not found:", filePath);
+      return res.status(500).send("Export file not found");
+    }
+
+    res.download(filePath);
   } catch (err) {
+    console.error("Attendance PDF error:", err);
     res.status(500).json({ message: "Error generating Attendance & Usage PDF", error: err.message });
   }
 };
@@ -24,12 +44,21 @@ const generateAttendancePDFReport = async (req, res) => {
 const generateAttendanceCSVReport = async (req, res) => {
   try {
     const dayParam = req.params.day ? Number(req.params.day) : undefined;
-    if (dayParam !== undefined && (!Number.isFinite(dayParam) || dayParam < 1 || dayParam > 5)) {
+    if (dayParam !== undefined && (dayParam < 1 || dayParam > 5)) {
       return res.status(400).send("Invalid day. Allowed values are 1-5.");
     }
-    const file = await generateAttendanceUsageCSV({ day: dayParam });
-    res.json({ message: "Attendance & Usage CSV generated", file });
+
+    const filename = await generateAttendanceUsageCSV({ day: dayParam });
+    const filePath = resolveFilePath(filename);
+
+    if (!fs.existsSync(filePath)) {
+      console.error("File not found:", filePath);
+      return res.status(500).send("Export file not found");
+    }
+
+    res.download(filePath);
   } catch (err) {
+    console.error("Attendance CSV error:", err);
     res.status(500).json({ message: "Error generating Attendance & Usage CSV", error: err.message });
   }
 };
@@ -38,12 +67,21 @@ const generateAttendanceCSVReport = async (req, res) => {
 const generateMovementPDFReport = async (req, res) => {
   try {
     const dayParam = req.params.day ? Number(req.params.day) : undefined;
-    if (dayParam !== undefined && (!Number.isFinite(dayParam) || dayParam < 1 || dayParam > 5)) {
+    if (dayParam !== undefined && (dayParam < 1 || dayParam > 5)) {
       return res.status(400).send("Invalid day. Allowed values are 1-5.");
     }
-    const file = await generateMovementFlowPDF({ day: dayParam });
-    res.json({ message: "Movement & Flow PDF generated", file });
+
+    const filename = await generateMovementFlowPDF({ day: dayParam });
+    const filePath = resolveFilePath(filename);
+
+    if (!fs.existsSync(filePath)) {
+      console.error("File not found:", filePath);
+      return res.status(500).send("Export file not found");
+    }
+
+    res.download(filePath);
   } catch (err) {
+    console.error("Movement PDF error:", err);
     res.status(500).json({ message: "Error generating Movement & Flow PDF", error: err.message });
   }
 };
@@ -51,12 +89,21 @@ const generateMovementPDFReport = async (req, res) => {
 const generateMovementCSVReport = async (req, res) => {
   try {
     const dayParam = req.params.day ? Number(req.params.day) : undefined;
-    if (dayParam !== undefined && (!Number.isFinite(dayParam) || dayParam < 1 || dayParam > 5)) {
+    if (dayParam !== undefined && (dayParam < 1 || dayParam > 5)) {
       return res.status(400).send("Invalid day. Allowed values are 1-5.");
     }
-    const file = await generateMovementFlowCSV({ day: dayParam });
-    res.json({ message: "Movement & Flow CSV generated", file });
+
+    const filename = await generateMovementFlowCSV({ day: dayParam });
+    const filePath = resolveFilePath(filename);
+
+    if (!fs.existsSync(filePath)) {
+      console.error("File not found:", filePath);
+      return res.status(500).send("Export file not found");
+    }
+
+    res.download(filePath);
   } catch (err) {
+    console.error("Movement CSV error:", err);
     res.status(500).json({ message: "Error generating Movement & Flow CSV", error: err.message });
   }
 };
@@ -65,23 +112,32 @@ const generateMovementCSVReport = async (req, res) => {
 const generateSecurityPDFReport = async (req, res) => {
   try {
     const dayParam = req.params.day ? Number(req.params.day) : undefined;
-    if (dayParam !== undefined && (!Number.isFinite(dayParam) || dayParam < 1 || dayParam > 5)) {
+    if (dayParam !== undefined && (dayParam < 1 || dayParam > 5)) {
       return res.status(400).send("Invalid day. Allowed values are 1-5.");
     }
+
     const overstayMinutes = req.query.overstay ? Number(req.query.overstay) : undefined;
     const congestionThreshold = req.query.congestion ? Number(req.query.congestion) : undefined;
     const restrictedList = typeof req.query.restricted === 'string' && req.query.restricted.length
       ? req.query.restricted.split(',').map(s => s.trim()).filter(Boolean)
       : undefined;
 
-    const file = await generateSecurityExceptionPDF({
+    const filename = await generateSecurityExceptionPDF({
       day: dayParam,
       overstayMinutes,
       congestionThreshold,
       restrictedList
     });
-    res.json({ message: "Security & Exception PDF generated", file });
+
+    const filePath = resolveFilePath(filename);
+    if (!fs.existsSync(filePath)) {
+      console.error("File not found:", filePath);
+      return res.status(500).send("Export file not found");
+    }
+
+    res.download(filePath);
   } catch (err) {
+    console.error("Security PDF error:", err);
     res.status(500).json({ message: "Error generating Security & Exception PDF", error: err.message });
   }
 };
@@ -90,13 +146,21 @@ const generateSecurityPDFReport = async (req, res) => {
 const generateEventPDFReport = async (req, res) => {
   try {
     const dayParam = req.params.day ? Number(req.params.day) : undefined;
-    if (dayParam !== undefined && (!Number.isFinite(dayParam) || dayParam < 1 || dayParam > 5)) {
+    if (dayParam !== undefined && (dayParam < 1 || dayParam > 5)) {
       return res.status(400).send("Invalid day. Allowed values are 1-5.");
     }
+
     const filename = await generateEventPDF({ day: dayParam });
-    res.download(`exports/${filename}`);
+    const filePath = resolveFilePath(filename);
+
+    if (!fs.existsSync(filePath)) {
+      console.error("File not found:", filePath);
+      return res.status(500).send("Export file not found");
+    }
+
+    res.download(filePath);
   } catch (err) {
-    console.error("Error in event PDF:", err);
+    console.error("Event PDF error:", err);
     res.status(500).send("Failed to generate Event PDF");
   }
 };

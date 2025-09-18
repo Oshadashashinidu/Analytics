@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
 const { loadImage } = require("canvas");
-const pool = require("../utils/db1.js"); // adjust as needed
+const pool = require("../utils/db3.js"); // adjust as needed
 const { getDateForDay } = require("../utils/dates");
 
 const CHART_WIDTH = 900;

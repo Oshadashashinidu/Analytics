@@ -7,7 +7,7 @@ const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
 // app.js or server.js
 require('chartjs-chart-matrix');
 
-const pool = require("../utils/db1.js");
+const pool = require("../utils/db3.js");
 const { getDateForDay } = require("../utils/dates");
 
 const CHART_WIDTH = 900;

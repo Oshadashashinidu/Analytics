@@ -16,14 +16,16 @@ CREATE TABLE Zone (
     zone_name VARCHAR(100) NOT NULL
 );
 
--- 2. Building
 CREATE TABLE Building (
-    building_ID SERIAL PRIMARY KEY,
+    building_ID INT PRIMARY KEY,
     zone_ID INT NOT NULL,
-    building_name VARCHAR(150) NOT NULL,
+    building_name VARCHAR(150) NOT NULL UNIQUE,  -- enforce unique names
     description TEXT,
+    exhibits TEXT[],  -- array to hold multiple exhibit names/IDs
     CONSTRAINT fk_building_zone FOREIGN KEY (zone_ID) REFERENCES Zone(zone_ID) ON DELETE CASCADE
 );
+
+
 
 -- 3. Exhibits
 CREATE TABLE Exhibits (
@@ -41,7 +43,8 @@ CREATE TABLE Organizer (
     lname VARCHAR(100) NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
     contact_no VARCHAR(20),
-    password_hash VARCHAR(255) NOT NULL
+    password_hash VARCHAR(255) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending'
 );
 
 -- 5. Events (linked to Organizer)
@@ -53,11 +56,10 @@ CREATE TABLE Events (
     location VARCHAR(200),
     description TEXT,
     media_urls TEXT,
-    event_category VARCHAR(100),
-    CONSTRAINT chk_event_time CHECK (start_time < end_time),
-    organizer_ID INT,
-    CONSTRAINT fk_event_organizer FOREIGN KEY (organizer_ID) REFERENCES Organizer(organizer_ID) ON DELETE SET NULL
+    event_categories TEXT[],   -- now supports multiple categories
+    CONSTRAINT chk_event_time CHECK (start_time < end_time)
 );
+
 
 -- 6. Admin
 CREATE TABLE Admin (
