@@ -68,7 +68,18 @@ const generateSecurityPDFReport = async (req, res) => {
     if (dayParam !== undefined && (!Number.isFinite(dayParam) || dayParam < 1 || dayParam > 5)) {
       return res.status(400).send("Invalid day. Allowed values are 1-5.");
     }
-    const file = await generateSecurityExceptionPDF({ day: dayParam });
+    const overstayMinutes = req.query.overstay ? Number(req.query.overstay) : undefined;
+    const congestionThreshold = req.query.congestion ? Number(req.query.congestion) : undefined;
+    const restrictedList = typeof req.query.restricted === 'string' && req.query.restricted.length
+      ? req.query.restricted.split(',').map(s => s.trim()).filter(Boolean)
+      : undefined;
+
+    const file = await generateSecurityExceptionPDF({
+      day: dayParam,
+      overstayMinutes,
+      congestionThreshold,
+      restrictedList
+    });
     res.json({ message: "Security & Exception PDF generated", file });
   } catch (err) {
     res.status(500).json({ message: "Error generating Security & Exception PDF", error: err.message });

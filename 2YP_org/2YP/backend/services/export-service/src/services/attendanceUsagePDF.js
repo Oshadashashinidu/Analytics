@@ -3,7 +3,7 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
-const pool = require("../../../../db/db.js"); // adjust as needed
+const pool = require("../utils/db1.js"); // adjust as needed
 const { getDateForDay } = require("../utils/dates");
 
 const CHART_WIDTH = 700;
@@ -20,6 +20,17 @@ function fmtMinutes(mins){
     return `${h}h ${m}m (${n.toFixed(1)} mins)`;
   }
   return `${n.toFixed(1)} mins`;
+}
+
+// Safely embed an image buffer into the PDF (skips invalid/empty buffers)
+function safeImage(doc, buffer, options){
+  try {
+    if (Buffer.isBuffer(buffer) && buffer.length > 100) {
+      doc.image(buffer, options || {});
+    }
+  } catch (err) {
+    console.error("PDF image embed error:", err);
+  }
 }
 
 // Improved table drawer with word wrap and row separation
@@ -92,8 +103,8 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     // Total visits per building (count of rows)
     const totalVisitsRes = await pool.query(`
       SELECT b.dept_name, b.building_id, COUNT(*)::int AS visits
-      FROM EntryExitLog e
-      JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      JOIN "BUILDING" b ON e.building_id = b.building_id
       ${whereDay}
       GROUP BY b.dept_name, b.building_id
       ORDER BY visits DESC;
@@ -102,8 +113,8 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     // Unique visitors per building
     const uniqueVisitorsRes = await pool.query(`
       SELECT b.dept_name, b.building_id, COUNT(DISTINCT e.tag_id)::int AS unique_visitors
-      FROM EntryExitLog e
-      JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      JOIN "BUILDING" b ON e.building_id = b.building_id
       ${whereDay}
       GROUP BY b.dept_name, b.building_id;
     `, params);
@@ -111,8 +122,8 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     // Avg duration per building (minutes)
     const avgTimeRes = await pool.query(`
       SELECT b.dept_name, b.building_id, AVG(EXTRACT(EPOCH FROM (e.exit_time - e.entry_time))/60)::numeric(10,2) AS avg_minutes
-      FROM EntryExitLog e
-      JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      JOIN "BUILDING" b ON e.building_id = b.building_id
       WHERE e.exit_time IS NOT NULL
       ${day ? 'AND DATE(e.entry_time) = $1::date' : ''}
       GROUP BY b.dept_name, b.building_id;
@@ -121,7 +132,7 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     // Peak entry times (hourly distribution)
     const peakHourRes = await pool.query(`
       SELECT EXTRACT(HOUR FROM entry_time)::int AS hour, COUNT(*)::int AS entries
-      FROM EntryExitLog e
+      FROM "EntryExitLog" e
       ${whereDay}
       GROUP BY hour
       ORDER BY hour ASC;
@@ -130,7 +141,7 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     // Repeat visits (tag_id with count > 1)
     const repeatVisitsRes = await pool.query(`
       SELECT tag_id, COUNT(*)::int AS visits
-      FROM EntryExitLog e
+      FROM "EntryExitLog" e
       ${whereDay}
       GROUP BY tag_id
       HAVING COUNT(*) > 1
@@ -140,11 +151,11 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     // Repeat visits (same tag_id multiple times, with building and entry_time)
     const repeatVisitsDetailRes = await pool.query(`
       SELECT tag_id, building_id, entry_time
-      FROM EntryExitLog e
+      FROM "EntryExitLog" e
       ${whereDay}
       AND tag_id IN (
         SELECT tag_id
-        FROM EntryExitLog
+        FROM "EntryExitLog"
         ${whereDay.replace('WHERE','WHERE')}
         GROUP BY tag_id
         HAVING COUNT(*) > 1
@@ -155,7 +166,7 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     // Zone heatmap: map first char of building_id as zone
     const zoneHeatmapRes = await pool.query(`
       SELECT SUBSTRING(building_id,1,1) AS zone, COUNT(*)::int AS visits
-      FROM EntryExitLog e
+      FROM "EntryExitLog" e
       ${whereDay}
       GROUP BY zone
       ORDER BY visits DESC;
@@ -172,7 +183,7 @@ async function generateAttendanceUsagePDF({ day } = {}) {
            WHEN entry_time::time >= '16:00'::time AND entry_time::time < '19:00'::time THEN '16-19'
            ELSE 'other'
          END AS slot
-        FROM EntryExitLog e
+        FROM "EntryExitLog" e
         ${whereDay}
       ) s
       GROUP BY slot
@@ -328,12 +339,13 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     // ---- Build PDF ----
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `attendance_usage${day ? `_day${day}` : ''}_${timestamp}.pdf`;
-    const exportsDir = path.join(__dirname, "../../exports");
+    const exportsDir = path.resolve(__dirname, "..", "..", "exports");
     if (!fs.existsSync(exportsDir)) fs.mkdirSync(exportsDir, { recursive: true });
     const filepath = path.join(exportsDir, filename);
+    const tempPath = `${filepath}.part`;
 
     const doc = new PDFDocument({ margin: 36, size: "A4", layout: "landscape" });
-    const stream = fs.createWriteStream(filepath);
+    const stream = fs.createWriteStream(tempPath);
     doc.pipe(stream);
 
     doc.fontSize(20).fillColor("#0b4b8a").text(`Attendance & Usage Report${day ? ` - Day ${day}` : ''}` , { align: "left" });
@@ -370,8 +382,8 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     for (const slot of slotRanges) {
       const res = await pool.query(`
         SELECT b.dept_name, b.building_id, COUNT(*)::int AS visits
-        FROM EntryExitLog e
-        JOIN Building b ON e.building_id = b.building_id
+        FROM "EntryExitLog" e
+        JOIN "BUILDING" b ON e.building_id = b.building_id
         WHERE 
           (CASE
             WHEN e.entry_time::time >= '10:00'::time AND e.entry_time::time < '13:00'::time THEN '10-13'
@@ -442,7 +454,7 @@ async function generateAttendanceUsagePDF({ day } = {}) {
         doc.moveDown(0.3);
 
         // Chart
-        doc.image(slotBarBuffers[slot.key], { fit: [CHART_WIDTH, CHART_HEIGHT/1.5], align: "center" });
+        safeImage(doc, slotBarBuffers[slot.key], { fit: [CHART_WIDTH, CHART_HEIGHT/1.5], align: "center" });
         doc.moveDown(0.2);
 
         // Legend
@@ -471,9 +483,6 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     doc.moveDown(0.5);
 
     const slotTotals = slotVisits.filter(s => ["10-13","13-16","16-19"].includes(s.slot));
-    let maxSlot = slotTotals[0];
-    slotTotals.forEach(s => { if (s.visits > maxSlot.visits) maxSlot = s; });
-
     const slotLabelsMap = {
       "10-13": "10am - 1pm",
       "13-16": "1pm - 4pm",
@@ -481,52 +490,76 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     };
     const slotColors = ["#1976d2", "#388e3c", "#fbc02d"];
 
-    // Pie chart for slot distribution
-    const pieBuffer = await chartJSNodeCanvas.renderToBuffer({
-      type: "pie",
-      data: {
-        labels: slotTotals.map(s => slotLabelsMap[s.slot]),
-        datasets: [{
-          data: slotTotals.map(s => s.visits),
-          backgroundColor: slotColors
-        }]
-      },
-      options: {
-        responsive: false,
-        plugins: {
-          legend: { display: true, position: "right" },
-          title: { display: true, text: "Proportion of Visits by Time Slot" }
+    if (slotTotals.length > 0) {
+      let maxSlot = slotTotals[0];
+      slotTotals.forEach(s => { if (s.visits > maxSlot.visits) maxSlot = s; });
+
+      // Pie chart for slot distribution
+      const pieBuffer = await chartJSNodeCanvas.renderToBuffer({
+        type: "pie",
+        data: {
+          labels: slotTotals.map(s => slotLabelsMap[s.slot]),
+          datasets: [{
+            data: slotTotals.map(s => s.visits),
+            backgroundColor: slotColors
+          }]
+        },
+        options: {
+          responsive: false,
+          plugins: {
+            legend: { display: true, position: "right" },
+            title: { display: true, text: "Proportion of Visits by Time Slot" }
+          }
         }
-      }
-    });
+      });
 
-    doc.fontSize(12).fillColor("#000").text(
-      `The period with the highest total number of people present is:`,
-      { align: "left" }
-    );
-    doc.moveDown(0.3);
-    doc.fontSize(14).fillColor("#1976d2").text(
-      `${slotLabelsMap[maxSlot.slot]} (${maxSlot.visits} visits)`,
-      { align: "left", underline: true }
-    );
-    doc.moveDown(0.5);
-    doc.fontSize(11).fillColor("#000").text(
-      `This means that the busiest period overall was ${slotLabelsMap[maxSlot.slot]}, with a total of ${maxSlot.visits} visits recorded across all buildings.`
-    );
-    doc.moveDown(0.5);
+      doc.fontSize(12).fillColor("#000").text(
+        `The period with the highest total number of people present is:`,
+        { align: "left" }
+      );
+      doc.moveDown(0.3);
+      doc.fontSize(14).fillColor("#1976d2").text(
+        `${slotLabelsMap[maxSlot.slot]} (${maxSlot.visits} visits)`,
+        { align: "left", underline: true }
+      );
+      doc.moveDown(0.5);
+      doc.fontSize(11).fillColor("#000").text(
+        `This means that the busiest period overall was ${slotLabelsMap[maxSlot.slot]}, with a total of ${maxSlot.visits} visits recorded across all buildings.`
+      );
+      doc.moveDown(0.5);
 
-    doc.image(pieBuffer, { fit: [400, 250], align: "center" });
-    doc.moveDown(0.2);
-    doc.fontSize(9).fillColor("#666").text(
-      "Legend: Each slice represents a time slot. The size shows the proportion of visits for that period."
-    );
+      safeImage(doc, pieBuffer, { fit: [400, 250], align: "center" });
+      doc.moveDown(0.2);
+      doc.fontSize(9).fillColor("#666").text(
+        "Legend: Each slice represents a time slot. The size shows the proportion of visits for that period."
+      );
+    } else {
+      doc.fontSize(12).fillColor("#000").text(
+        "No slot distribution data available to summarize.",
+        { align: "left" }
+      );
+    }
 
     doc.end();
 
     // Wait for file to finish writing
-    await new Promise(resolve => stream.on("finish", resolve));
+    await new Promise((resolve, reject) => {
+      stream.on("finish", resolve);
+      stream.on("error", reject);
+    });
 
-    return filename;
+    try {
+      const stats = fs.statSync(tempPath);
+      if (!stats || stats.size === 0) {
+        throw new Error(`Export appears empty: ${tempPath}`);
+      }
+      // Atomic rename to final path
+      fs.renameSync(tempPath, filepath);
+    } catch (e) {
+      throw new Error(`Export not saved correctly at ${tempPath}: ${e.message}`);
+    }
+
+    return filepath;
   } catch (err) {
     console.error("Error generating Attendance & Usage PDF:", err);
     throw err;

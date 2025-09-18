@@ -3,7 +3,7 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
-const pool = require("../../../../db/db.js"); // adjust as needed
+const pool = require("../utils/db1.js"); // adjust as needed
 const { getDateForDay } = require("../utils/dates");
 
 const CHART_WIDTH = 350;

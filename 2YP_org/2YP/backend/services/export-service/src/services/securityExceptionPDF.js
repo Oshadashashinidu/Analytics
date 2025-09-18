@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
 const { loadImage } = require("canvas");
-const pool = require("../../../../db/db.js"); // adjust as needed
+const pool = require("../utils/db1.js"); // adjust as needed
 const { getDateForDay } = require("../utils/dates");
 
 const CHART_WIDTH = 900;
@@ -27,7 +27,7 @@ async function generateSecurityExceptionPDF(options = {}) {
     // ---- Queries ----
     const afterHoursRes = await pool.query(`
       SELECT tag_id, building_id, entry_time
-      FROM EntryExitLog
+      FROM "EntryExitLog"
       WHERE NOT (
         (entry_time::time >= '10:00' AND entry_time::time < '13:00')
         OR (entry_time::time >= '13:00' AND entry_time::time < '16:00')
@@ -41,7 +41,7 @@ async function generateSecurityExceptionPDF(options = {}) {
     const overstayRes = await pool.query(`
       SELECT tag_id, building_id, entry_time, exit_time,
              EXTRACT(EPOCH FROM (exit_time - entry_time))/60 AS minutes
-      FROM EntryExitLog
+      FROM "EntryExitLog"
       WHERE exit_time IS NOT NULL
         AND EXTRACT(EPOCH FROM (exit_time - entry_time))/60 > $1
         ${day ? 'AND DATE(entry_time) = $2::date' : ''}
@@ -51,7 +51,7 @@ async function generateSecurityExceptionPDF(options = {}) {
 
     const missingExitRes = await pool.query(`
       SELECT tag_id, building_id, entry_time
-      FROM EntryExitLog
+      FROM "EntryExitLog"
       WHERE exit_time IS NULL
       ${filterDate ? 'AND DATE(entry_time) = $1::date' : ''}
       ORDER BY entry_time DESC
@@ -60,17 +60,17 @@ async function generateSecurityExceptionPDF(options = {}) {
 
     const restrictedRes = await pool.query(`
       SELECT e.tag_id, e.building_id, b.dept_name, e.entry_time
-      FROM EntryExitLog e
-      LEFT JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      LEFT JOIN "BUILDING" b ON e.building_id = b.building_id
       WHERE e.building_id = ANY($1)
       ${filterDate ? 'AND DATE(e.entry_time) = $2::date' : ''}
       ORDER BY e.entry_time DESC
       LIMIT 200;
-    `, day ? [restrictedList, paramDate] : [restrictedList]);
+    `, filterDate ? [restrictedList, filterDate] : [restrictedList]);
 
     const restrictedNamesRes = await pool.query(`
       SELECT building_id, dept_name
-      FROM Building
+      FROM "BUILDING"
       WHERE building_id = ANY($1);
     `, [restrictedList]);
 
@@ -86,8 +86,8 @@ async function generateSecurityExceptionPDF(options = {}) {
           ELSE 'other'
         END AS slot,
         COUNT(*)::int AS entries
-      FROM EntryExitLog e
-      JOIN Building b ON e.building_id = b.building_id
+      FROM "EntryExitLog" e
+      LEFT JOIN "BUILDING" b ON e.building_id = b.building_id
       ${filterDate ? 'WHERE DATE(e.entry_time) = $1::date' : ''}
       GROUP BY b.dept_name, e.building_id, slot
       ORDER BY entries DESC
@@ -104,9 +104,9 @@ async function generateSecurityExceptionPDF(options = {}) {
            WHEN entry_time::time >= '16:00' AND entry_time::time < '19:00' THEN '16-19'
            ELSE 'other'
          END AS slot
-        FROM EntryExitLog
+        FROM "EntryExitLog"
         WHERE building_id IS NOT NULL
-        ${filterDate ? 'AND DATE(entry_time) = $1::date' : ''}
+        ${filterDate ? 'AND DATE(entry_time) = $2::date' : ''}
       ) s
       GROUP BY building_id, slot
       HAVING COUNT(*) >= $1
@@ -151,12 +151,13 @@ async function generateSecurityExceptionPDF(options = {}) {
     // ---- Build PDF ----
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `security_exception_${timestamp}.pdf`;
-    const exportsDir = path.join(__dirname, "../../exports");
+    const exportsDir = path.resolve(__dirname, "..", "..", "exports");
     if (!fs.existsSync(exportsDir)) fs.mkdirSync(exportsDir, { recursive: true });
     const filepath = path.join(exportsDir, filename);
+    const tempPath = `${filepath}.part`;
 
     const doc = new PDFDocument({ margin: 36, size: "A4", layout: "landscape" });
-    const stream = fs.createWriteStream(filepath);
+    const stream = fs.createWriteStream(tempPath);
     doc.pipe(stream);
 
     // Title
@@ -177,15 +178,23 @@ async function generateSecurityExceptionPDF(options = {}) {
 
     // Sections
     doc.fontSize(12).fillColor("#b71c1c").text("After-hours Entries (recent)", { underline: true });
-    afterHours.slice(0, 100).forEach(r => {
-      doc.fontSize(10).fillColor("black").text(`tag:${r.tag_id} | building:${r.building_id} | entry:${fmtDate(r.entry_time)}`);
-    });
+    if (afterHours.length === 0) {
+      doc.fontSize(10).fillColor("black").text("No after-hours entries for the selected day.");
+    } else {
+      afterHours.slice(0, 100).forEach(r => {
+        doc.fontSize(10).fillColor("black").text(`tag:${r.tag_id} | building:${r.building_id} | entry:${fmtDate(r.entry_time)}`);
+      });
+    }
     doc.addPage();
 
     doc.fontSize(12).fillColor("#b71c1c").text("Overstays (long durations)", { underline: true });
-    overstays.slice(0, 100).forEach(r => {
-      doc.fontSize(10).fillColor("black").text(`tag:${r.tag_id} | b:${r.building_id} | in:${fmtDate(r.entry_time)} | out:${fmtDate(r.exit_time)} | ${Math.round(r.minutes)} mins`);
-    });
+    if (overstays.length === 0) {
+      doc.fontSize(10).fillColor("black").text("No overstays exceeded the threshold.");
+    } else {
+      overstays.slice(0, 100).forEach(r => {
+        doc.fontSize(10).fillColor("black").text(`tag:${r.tag_id} | b:${r.building_id} | in:${fmtDate(r.entry_time)} | out:${fmtDate(r.exit_time)} | ${Math.round(r.minutes)} mins`);
+      });
+    }
     if (overstayBuffer) {
       doc.moveDown(0.5);
       doc.image(overstayBuffer, { fit: [700, 240], align: "center" });
@@ -193,22 +202,34 @@ async function generateSecurityExceptionPDF(options = {}) {
     doc.addPage();
 
     doc.fontSize(12).fillColor("#b71c1c").text("Missing Exits (currently open sessions)", { underline: true });
-    missingExits.slice(0, 200).forEach(r => {
-      doc.fontSize(10).fillColor("black").text(`tag:${r.tag_id} | building:${r.building_id} | entry:${fmtDate(r.entry_time)}`);
-    });
+    if (missingExits.length === 0) {
+      doc.fontSize(10).fillColor("black").text("No sessions without exit detected.");
+    } else {
+      missingExits.slice(0, 200).forEach(r => {
+        doc.fontSize(10).fillColor("black").text(`tag:${r.tag_id} | building:${r.building_id} | entry:${fmtDate(r.entry_time)}`);
+      });
+    }
     doc.addPage();
 
     doc.fontSize(12).fillColor("#b71c1c").text("Restricted Building Entries", { underline: true });
-    restricted.slice(0, 200).forEach(r => {
-      const name = r.dept_name ? `${r.building_id} (${r.dept_name})` : r.building_id;
-      doc.fontSize(10).fillColor("black").text(`tag:${r.tag_id} | building:${name} | entry:${fmtDate(r.entry_time)}`);
-    });
+    if (restricted.length === 0) {
+      doc.fontSize(10).fillColor("black").text("No entries to restricted buildings.");
+    } else {
+      restricted.slice(0, 200).forEach(r => {
+        const name = r.dept_name ? `${r.building_id} (${r.dept_name})` : r.building_id;
+        doc.fontSize(10).fillColor("black").text(`tag:${r.tag_id} | building:${name} | entry:${fmtDate(r.entry_time)}`);
+      });
+    }
     doc.addPage();
 
     doc.fontSize(12).fillColor("#b71c1c").text("After-hours Entries by Building (slots)", { underline: true });
-    afterHoursByBuilding.slice(0, 200).forEach(r => {
-      doc.fontSize(10).fillColor("black").text(`building:${r.dept_name || r.building_id} | slot:${r.slot} | entries:${r.entries}`);
-    });
+    if (afterHoursByBuilding.length === 0) {
+      doc.fontSize(10).fillColor("black").text("No after-hours entries aggregated by building.");
+    } else {
+      afterHoursByBuilding.slice(0, 200).forEach(r => {
+        doc.fontSize(10).fillColor("black").text(`building:${r.dept_name || r.building_id} | slot:${r.slot} | entries:${r.entries}`);
+      });
+    }
     if (afterBuffer) {
       doc.moveDown(0.5);
       doc.image(afterBuffer, { fit: [700, 240], align: "center" });
@@ -216,9 +237,13 @@ async function generateSecurityExceptionPDF(options = {}) {
     doc.addPage();
 
     doc.fontSize(12).fillColor("#b71c1c").text("Congestion Alerts (building & slot)", { underline: true });
-    congestion.slice(0, 200).forEach(r => {
-      doc.fontSize(10).fillColor("black").text(`building:${r.building_id} | slot:${r.slot} | entries:${r.cnt}`);
-    });
+    if (congestion.length === 0) {
+      doc.fontSize(10).fillColor("black").text("No congestion alerts for the selected threshold.");
+    } else {
+      congestion.slice(0, 200).forEach(r => {
+        doc.fontSize(10).fillColor("black").text(`building:${r.building_id} | slot:${r.slot} | entries:${r.cnt}`);
+      });
+    }
 
     // ---- Faculty Map Section ----
     doc.addPage();
@@ -240,6 +265,16 @@ async function generateSecurityExceptionPDF(options = {}) {
     // Finish
     doc.end();
     await new Promise((resolve, reject) => { stream.on("finish", resolve); stream.on("error", reject); });
+
+    try {
+      const stats = fs.statSync(tempPath);
+      if (!stats || stats.size === 0) {
+        throw new Error(`Export appears empty: ${tempPath}`);
+      }
+      fs.renameSync(tempPath, filepath);
+    } catch (e) {
+      throw new Error(`Export not saved correctly at ${tempPath}: ${e.message}`);
+    }
 
     return filepath;
   } catch (err) {
