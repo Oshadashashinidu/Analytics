@@ -108,21 +108,41 @@ async function getVisitorsPerBuilding(date, slot) {
   const { start, end } = getSlotRange(date, slot);
 
   const query = `
-    SELECT 
-      b.dept_name AS building,
-      COUNT(DISTINCT e.tag_id) AS total_visitors
-    FROM "BUILDING" b
-    LEFT JOIN "EntryExitLog" e 
-      ON e.building_id = b.building_id
-      AND e.entry_time >= $1 
-      AND e.entry_time < $2
-    GROUP BY b.dept_name
-    ORDER BY total_visitors DESC
+    WITH visitor_counts AS (
+      SELECT 
+        b.dept_name AS building,
+        COUNT(DISTINCT e.tag_id) AS total_visitors
+      FROM "BUILDING" b
+      LEFT JOIN "EntryExitLog" e 
+        ON e.building_id = b.building_id
+        AND e.entry_time >= $1 
+        AND e.entry_time < $2
+      GROUP BY b.dept_name
+    ),
+    top_visited AS (
+      SELECT *
+      FROM visitor_counts
+      ORDER BY total_visitors DESC, building ASC
+      LIMIT 10
+    ),
+    filler AS (
+      SELECT vc.building, vc.total_visitors
+      FROM visitor_counts vc
+      WHERE vc.total_visitors = 0
+        AND vc.building NOT IN (SELECT building FROM top_visited)
+      ORDER BY vc.building ASC
+      LIMIT (10 - (SELECT COUNT(*) FROM top_visited))
+    )
+    SELECT * FROM top_visited
+    UNION ALL
+    SELECT * FROM filler
+    LIMIT 10;
   `;
 
   const { rows } = await db.query(query, [start, end]);
   return rows;
 }
+
 
 
 
