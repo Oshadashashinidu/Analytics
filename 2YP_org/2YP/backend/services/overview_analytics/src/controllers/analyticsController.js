@@ -73,8 +73,6 @@ async function getVisitorsPerBuilding(req, res) {
 
 
 
-
-
 // Visitors Growth
 async function getVisitorsGrowth(req, res) {
   try {

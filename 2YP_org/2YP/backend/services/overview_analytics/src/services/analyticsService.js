@@ -76,44 +76,53 @@ async function getRepeatVisitors(buildingId, date, slot) {
   const repeatVisitors = rows.filter(r => Number(r.visits) > 1).length;
 
   return {
-    totalVisitors,
-    repeatVisitors,
-    repeatPercentage: totalVisitors > 0 ? (repeatVisitors / totalVisitors) * 100 : 0,
+       repeatVisitors
   };
 }
 
 // 5. Top 3 buildings during a slot
 async function getTop3Buildings(date, slot) {
   const { start, end } = getSlotRange(date, slot);
+
   const query = `
-    SELECT b.dept_name AS building, COUNT(DISTINCT e.tag_id) AS visitors
-    FROM "EntryExitLog" e
-    JOIN "BUILDING" b ON e.building_id = b.building_id
-    WHERE e.entry_time >= $1 AND e.entry_time < $2
+    SELECT 
+      b.dept_name AS building,
+      COUNT(DISTINCT e.tag_id) AS visitors
+    FROM "BUILDING" b
+    LEFT JOIN "EntryExitLog" e 
+      ON e.building_id = b.building_id
+      AND e.entry_time >= $1 
+      AND e.entry_time < $2
     GROUP BY b.dept_name
-    ORDER BY visitors DESC
+    ORDER BY visitors DESC, b.dept_name ASC
     LIMIT 3
   `;
+
   const { rows } = await db.query(query, [start, end]);
   return rows;
 }
+
 
 // 6. Total visitors per building for a time slot (for bar chart)
 async function getVisitorsPerBuilding(date, slot) {
   const { start, end } = getSlotRange(date, slot);
+
   const query = `
-    SELECT b.dept_name AS building, COUNT(DISTINCT e.tag_id) AS total_visitors
-    FROM "EntryExitLog" e
-    JOIN "BUILDING" b ON e.building_id = b.building_id
-    WHERE e.entry_time >= $1 AND e.entry_time < $2
+    SELECT 
+      b.dept_name AS building,
+      COUNT(DISTINCT e.tag_id) AS total_visitors
+    FROM "BUILDING" b
+    LEFT JOIN "EntryExitLog" e 
+      ON e.building_id = b.building_id
+      AND e.entry_time >= $1 
+      AND e.entry_time < $2
     GROUP BY b.dept_name
     ORDER BY total_visitors DESC
   `;
+
   const { rows } = await db.query(query, [start, end]);
   return rows;
 }
-
-
 
 
 

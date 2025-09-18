@@ -29,22 +29,20 @@ module.exports = router;
 
 //API endpoints for testing:
 
-//GET http://localhost:5006/analytics/total-visitors?buildingId=B3&date=2025-09-23&slot=1
+//GET http://localhost:5006/analytics/total-visitors?buildingId=B4&date=2025-09-17&slot=2
 
-//GET http://localhost:5006/analytics/total-checkins?buildingId=B3&date=2025-09-23&slot=2
+//GET http://localhost:5006/analytics/total-checkins?buildingId=B4&date=2025-09-17&slot=2
 
-//GET http://localhost:5006/analytics/avg-duration?buildingId=B3&date=2025-09-23&slot=3
+//GET http://localhost:5006/analytics/avg-duration?buildingId=B4&date=2025-09-17&slot=2
 
-//GET http://localhost:5006/analytics/repeat-visitors?buildingId=B3&date=2025-09-23&slot=1
+//GET http://localhost:5006/analytics/repeat-visitors?buildingId=B4&date=2025-09-17&slot=2
 
-//GET http://localhost:5006/analytics/top3-buildings?date=2025-09-23&slot=2
+//GET http://localhost:5006/analytics/top3-buildings?date=2025-09-17&slot=2
 
-//GET http://localhost:5006/analytics/visitors-per-building?date=2025-09-23&slot=1
+//GET http://localhost:5006/analytics/visitors-per-building?date=2025-09-17&slot=2
 
-// Example calls:
-// GET http://localhost:5006/analytics/visitors-growth?buildingId=B3&date=2025-09-23&slot=2
-// GET http://localhost:5006/analytics/checkins-growth?buildingId=B3&date=2025-09-23&slot=2
-// GET http://localhost:5006/analytics/avg-duration-growth?buildingId=B3&date=2025-09-23&slot=2
+// visitors Growth:
+// GET http://localhost:5006/analytics/visitors-growth?buildingId=B4&date=2025-09-17&slot=2
+// GET http://localhost:5006/analytics/checkins-growth?buildingId=B4&date=2025-09-17&slot=2
+// GET http://localhost:5006/analytics/avg-duration-growth?buildingId=B4&date=2025-09-17&slot=2
 
-
-//https://ynqcwlpuzgcdqoslmgqy.supabase.co/analytics/total-visitors?buildingId=B3&date=2025-09-23&slot=1
