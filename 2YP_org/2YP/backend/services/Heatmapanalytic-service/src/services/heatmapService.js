@@ -1,10 +1,11 @@
 const pool = require('../utils/db');
 
 const zoneToBuildingsMap = {
-  "Zone A": ["B13", "B10", "B15", "B14", "B16", "B17", "B18"],
-  "Zone B": ["B1", "B11", "B12", "B6", "B7", "B8", "B9", "B2", "B4"],
-  "Zone C": ["B19", "B20", "B22", "B23", "B24", "B28", "B31", "B34", "B33"],
-  "Zone D": ["B30", "B29"]
+  "Zone A": ["B13", "B15", "B6", "B10"],
+  "Zone B": ["B33", "B16", "B7", "B12", "B11"],
+  "Zone C": ["B34", "B20", "B19", "B31", "B28"],
+  "Zone D": ["B30", "B24", "B23", "B29", "B4", "B2", "B1"],
+  "Other": ["B14", "B17", "B18", "B22", "B32", "B8", "B9"]
 };
 
 function validateDuration(durationHours) {
@@ -15,16 +16,20 @@ function validateDuration(durationHours) {
 
 function getBuildingsForZoneAndBuilding(zone, building) {
   if (!zone) throw new Error('Zone is required');
+
   const buildings = zoneToBuildingsMap[zone];
   if (!buildings) {
     throw new Error('Invalid zone');
   }
-  if (!building || building === "All Buildings") {
+
+  if (!building || building === "All") {
     return buildings;
   }
+
   if (!buildings.includes(building)) {
     throw new Error('Building does not belong to the selected zone');
   }
+
   return [building];
 }
 
@@ -40,7 +45,6 @@ function queryWithTimeout(queryText, params, timeoutMs = 20000) {
 async function getPeakOccupancyByZoneAndBuilding(durationHours, zone, building) {
   const hours = validateDuration(durationHours);
   const buildings = getBuildingsForZoneAndBuilding(zone, building);
-
   const query = `
     SELECT building_id as building,
            SUM(CASE WHEN direction = 'IN' THEN 1 ELSE -1 END) AS net_occupancy
@@ -54,7 +58,7 @@ async function getPeakOccupancyByZoneAndBuilding(durationHours, zone, building) 
     const { rows } = await queryWithTimeout(query, [buildings]);
     return rows.map(row => ({
       building: row.building,
-      peak_occupancy: Math.max(row.net_occupancy, 0)
+      peak_occupancy: Math.max(row.net_occupancy, 0),
     }));
   } catch (error) {
     console.error('Error in getPeakOccupancy:', error);
@@ -65,7 +69,6 @@ async function getPeakOccupancyByZoneAndBuilding(durationHours, zone, building) 
 async function getAvgDwellTimeByZoneAndBuilding(durationHours, zone, building) {
   const hours = validateDuration(durationHours);
   const buildings = getBuildingsForZoneAndBuilding(zone, building);
-
   const query = `
     SELECT building_id AS building,
            AVG(EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60) AS avg_dwell_time_minutes
@@ -88,7 +91,6 @@ async function getAvgDwellTimeByZoneAndBuilding(durationHours, zone, building) {
 async function getActivityLevelByZoneAndBuilding(durationHours, zone, building) {
   const hours = validateDuration(durationHours);
   const buildings = getBuildingsForZoneAndBuilding(zone, building);
-
   const query = `
     SELECT building_id AS building,
            COUNT(DISTINCT tag_id) AS unique_visitors,
@@ -104,7 +106,7 @@ async function getActivityLevelByZoneAndBuilding(durationHours, zone, building) 
     const { rows } = await queryWithTimeout(query, [buildings]);
     return rows.map(row => ({
       ...row,
-      activity_level: row.unique_visitors > 100 ? 'High' : row.unique_visitors > 30 ? 'Medium' : 'Low'
+      activity_level: row.unique_visitors > 100 ? 'High' : row.unique_visitors > 30 ? 'Medium' : 'Low',
     }));
   } catch (error) {
     console.error('Error in getActivityLevel:', error);
