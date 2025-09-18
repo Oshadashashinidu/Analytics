@@ -1,112 +1,119 @@
 const pool = require('../utils/db');
 
+const zoneToBuildingsMap = {
+  "Zone A": ["B13", "B10", "B15", "B14", "B16", "B17", "B18"],
+  "Zone B": ["B1", "B11", "B12", "B6", "B7", "B8", "B9", "B2", "B4"],
+  "Zone C": ["B19", "B20", "B22", "B23", "B24", "B28", "B31", "B34", "B33"],
+  "Zone D": ["B30", "B29"]
+};
+
 function validateDuration(durationHours) {
   const hours = parseInt(durationHours, 10);
   if (isNaN(hours) || hours <= 0 || hours > 168) return 24;
   return hours;
 }
 
-async function getPeakOccupancyByZone(durationHours, zone) {
-  const hours = validateDuration(durationHours);
-  const query = `
-    WITH events AS (
-      SELECT "entry_time" AS event_time,
-        CASE WHEN "direction" = 'entry' THEN 1 ELSE -1 END AS change,
-        "building_id" AS building
-      FROM "EntryExitLog"
-      WHERE "building_id" IN (
-        SELECT "building_id" FROM "BUILDING" WHERE "dept_name" = $1
-      )
-      AND "entry_time" >= NOW() - INTERVAL '${hours} hours'
+function getBuildingsForZoneAndBuilding(zone, building) {
+  if (!zone) throw new Error('Zone is required');
+  const buildings = zoneToBuildingsMap[zone];
+  if (!buildings) {
+    throw new Error('Invalid zone');
+  }
+  if (!building || building === "All Buildings") {
+    return buildings;
+  }
+  if (!buildings.includes(building)) {
+    throw new Error('Building does not belong to the selected zone');
+  }
+  return [building];
+}
+
+function queryWithTimeout(queryText, params, timeoutMs = 20000) {
+  return Promise.race([
+    pool.query(queryText, params),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('DB query timeout')), timeoutMs)
     ),
-    runningsum AS (
-      SELECT event_time,
-        building,
-        SUM(change) OVER (PARTITION BY building ORDER BY event_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS occupancy
-      FROM events
-    )
-    SELECT building,
-      COALESCE(MAX(occupancy), 0) AS peak_occupancy
-    FROM runningsum
-    GROUP BY building
-    ORDER BY building;
-  `;
-
-  const { rows } = await pool.query(query, [zone]);
-  if (!rows.length) {
-    return [{ building: null, peak_occupancy: 0 }];
-  }
-  return rows;
+  ]);
 }
 
-async function getAvgDwellTimeByZone(durationHours, zone) {
+async function getPeakOccupancyByZoneAndBuilding(durationHours, zone, building) {
   const hours = validateDuration(durationHours);
-  const query = `
-    WITH visits AS (
-      SELECT "tag_id",
-        "building_id" AS building,
-        MIN("entry_time") AS entry_time,
-        MAX("exit_time") AS exit_time
-      FROM "EntryExitLog"
-      WHERE "building_id" IN (
-        SELECT "building_id" FROM "BUILDING" WHERE "dept_name" = $1
-      )
-      AND "entry_time" >= NOW() - INTERVAL '${hours} hours'
-      GROUP BY "tag_id", "building_id"
-    )
-    SELECT building,
-      COALESCE(AVG(EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60), 0) AS avg_dwell_minutes
-    FROM visits
-    WHERE entry_time IS NOT NULL AND exit_time IS NOT NULL
-    GROUP BY building
-    ORDER BY building;
-  `;
+  const buildings = getBuildingsForZoneAndBuilding(zone, building);
 
-  const { rows } = await pool.query(query, [zone]);
-  if (!rows.length) {
-    return [{ building: null, avg_dwell_minutes: 0 }];
-  }
-  return rows;
-}
-
-async function getActivityLevelByZone(durationHours, zone) {
-  const hours = validateDuration(durationHours);
   const query = `
-    SELECT "building_id" AS building,
-      COUNT(DISTINCT "tag_id") AS unique_visitors,
-      COUNT(*) FILTER (WHERE "direction" = 'entry') AS entries,
-      COUNT(*) FILTER (WHERE "direction" = 'exit') AS exits
+    SELECT building_id as building,
+           SUM(CASE WHEN direction = 'IN' THEN 1 ELSE -1 END) AS net_occupancy
     FROM "EntryExitLog"
-    WHERE "building_id" IN (
-      SELECT "building_id" FROM "BUILDING" WHERE "dept_name" = $1
-    )
-    AND "entry_time" >= NOW() - INTERVAL '${hours} hours'
-    GROUP BY "building_id"
-    ORDER BY "building_id";
+    WHERE building_id = ANY($1)
+      AND entry_time >= NOW() - INTERVAL '${hours} hours'
+    GROUP BY building_id
+    ORDER BY building_id;
   `;
-
-  const { rows } = await pool.query(query, [zone]);
-  if (!rows.length) {
-    return {
-      activity_level: 'Low',
-      total_unique_visitors: 0,
-      details_per_building: []
-    };
+  try {
+    const { rows } = await queryWithTimeout(query, [buildings]);
+    return rows.map(row => ({
+      building: row.building,
+      peak_occupancy: Math.max(row.net_occupancy, 0)
+    }));
+  } catch (error) {
+    console.error('Error in getPeakOccupancy:', error);
+    throw error;
   }
-  const totalVisitors = rows.reduce((a, r) => a + parseInt(r.unique_visitors, 10), 0);
-  let level = 'Low';
-  if (totalVisitors > 150) level = 'High';
-  else if (totalVisitors > 80) level = 'Medium';
+}
 
-  return {
-    activity_level: level,
-    total_unique_visitors: totalVisitors,
-    details_per_building: rows,
-  };
+async function getAvgDwellTimeByZoneAndBuilding(durationHours, zone, building) {
+  const hours = validateDuration(durationHours);
+  const buildings = getBuildingsForZoneAndBuilding(zone, building);
+
+  const query = `
+    SELECT building_id AS building,
+           AVG(EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60) AS avg_dwell_time_minutes
+    FROM "EntryExitLog"
+    WHERE building_id = ANY($1)
+      AND entry_time >= NOW() - INTERVAL '${hours} hours'
+      AND exit_time IS NOT NULL
+    GROUP BY building_id
+    ORDER BY building_id;
+  `;
+  try {
+    const { rows } = await queryWithTimeout(query, [buildings]);
+    return rows;
+  } catch (error) {
+    console.error('Error in getAvgDwellTime:', error);
+    throw error;
+  }
+}
+
+async function getActivityLevelByZoneAndBuilding(durationHours, zone, building) {
+  const hours = validateDuration(durationHours);
+  const buildings = getBuildingsForZoneAndBuilding(zone, building);
+
+  const query = `
+    SELECT building_id AS building,
+           COUNT(DISTINCT tag_id) AS unique_visitors,
+           COUNT(CASE WHEN direction = 'IN' THEN 1 END) AS entries,
+           COUNT(CASE WHEN direction = 'OUT' THEN 1 END) AS exits
+    FROM "EntryExitLog"
+    WHERE building_id = ANY($1)
+      AND entry_time >= NOW() - INTERVAL '${hours} hours'
+    GROUP BY building_id
+    ORDER BY building_id;
+  `;
+  try {
+    const { rows } = await queryWithTimeout(query, [buildings]);
+    return rows.map(row => ({
+      ...row,
+      activity_level: row.unique_visitors > 100 ? 'High' : row.unique_visitors > 30 ? 'Medium' : 'Low'
+    }));
+  } catch (error) {
+    console.error('Error in getActivityLevel:', error);
+    throw error;
+  }
 }
 
 module.exports = {
-  getPeakOccupancyByZone,
-  getAvgDwellTimeByZone,
-  getActivityLevelByZone,
+  getPeakOccupancyByZoneAndBuilding,
+  getAvgDwellTimeByZoneAndBuilding,
+  getActivityLevelByZoneAndBuilding
 };
