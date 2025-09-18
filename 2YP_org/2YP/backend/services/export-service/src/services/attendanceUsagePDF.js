@@ -3,7 +3,7 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
-const pool = require("../utils/db1.js"); // adjust as needed
+const pool = require("../utils/db3.js"); // adjust as needed
 const { getDateForDay } = require("../utils/dates");
 
 const CHART_WIDTH = 700;
@@ -378,6 +378,8 @@ async function generateAttendanceUsagePDF({ day } = {}) {
     ];
 
     // Query for each slot
+    // Only show buildings present in metrics for the day, and only show slot counts
+    const metricBuildingIds = metrics.map(m => m["Building ID"]);
     const slotBuildingData = {};
     for (const slot of slotRanges) {
       const res = await pool.query(`
@@ -385,6 +387,7 @@ async function generateAttendanceUsagePDF({ day } = {}) {
         FROM "EntryExitLog" e
         JOIN "BUILDING" b ON e.building_id = b.building_id
         WHERE 
+          ${day ? `DATE(e.entry_time) = $2::date AND` : ''}
           (CASE
             WHEN e.entry_time::time >= '10:00'::time AND e.entry_time::time < '13:00'::time THEN '10-13'
             WHEN e.entry_time::time >= '13:00'::time AND e.entry_time::time < '16:00'::time THEN '13-16'
@@ -393,8 +396,9 @@ async function generateAttendanceUsagePDF({ day } = {}) {
           END) = $1
         GROUP BY b.dept_name, b.building_id
         ORDER BY visits DESC;
-      `, [slot.key]);
-      slotBuildingData[slot.key] = res.rows || [];
+      `, day ? [slot.key, filterDate] : [slot.key]);
+      // Filter to only buildings in metrics
+      slotBuildingData[slot.key] = (res.rows || []).filter(r => metricBuildingIds.includes(r.building_id));
     }
 
     // Generate a bar chart for each slot
