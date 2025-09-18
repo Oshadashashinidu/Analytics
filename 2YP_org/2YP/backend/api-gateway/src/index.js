@@ -20,19 +20,19 @@ const verifyToken = require('./middlewares/verifyToken');
                              // it to the User Service.
 
 
-app.use('/organizers',verifyToken, createProxyMiddleware({
+app.use('/organizers',createProxyMiddleware({
     target: 'http://localhost:5001',
     changeOrigin: true,
     pathRewrite: (path, req) => req.originalUrl.replace(/^\/organizers/, '/organizers')
 }));
 
-app.use('/events',verifyToken, createProxyMiddleware({
+app.use('/events',createProxyMiddleware({
     target: 'http://localhost:5002',
     changeOrigin: true,
     pathRewrite: (path, req) => req.originalUrl.replace(/^\/events/, '/events')
 }));
 
-app.use('/buildings', verifyToken, createProxyMiddleware({
+app.use('/buildings',createProxyMiddleware({
     target: 'http://localhost:5003',
     changeOrigin: true,
     pathRewrite: (path, req) => req.originalUrl.replace(/^\/booths/, '/booths')

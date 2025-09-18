@@ -16,12 +16,28 @@ const chartJSNodeCanvas = new ChartJSNodeCanvas({ width: CHART_WIDTH, height: CH
 
 function safeNum(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
+// 🔹 Zone mapping (fixed according to your request)
+const zoneMap = {
+  A: ["B22", "B28", "B23", "B24", "B25", "B26", "B27"],
+  B: ["B1", "B2", "B3", "B4", "B5", "B6"],
+  C: ["B8", "B9", "B10", "B1", "B12", "B13"],
+  D: ["B15", "B16", "B17", "B18", "B19", "B20", "B21"],
+};
+
+function getZone(buildingId) {
+  if (!buildingId) return "Unknown";
+  const strId = String(buildingId);
+  for (const [zone, ids] of Object.entries(zoneMap)) {
+    if (ids.includes(strId)) return zone;
+  }
+  return "Unknown";
+}
+
 async function generateMovementFlowPDF({ day } = {}) {
   try {
     const filterDate = day ? getDateForDay(day) : null;
-    const whereDayEntries = filterDate ? `WHERE DATE(entry_time) = $1::date` : '';
-    const whereDayExits = filterDate ? `WHERE DATE(exit_time) = $1::date` : '';
     const params = filterDate ? [filterDate] : [];
+
     // ---- Queries ----
     const entryExitSlotsRes = await pool.query(`
       SELECT slot,
@@ -58,7 +74,7 @@ async function generateMovementFlowPDF({ day } = {}) {
       ORDER BY slot;
     `, params);
 
-    const transitionsRes = await pool.query(`
+    const rawTransitionsRes = await pool.query(`
       WITH ordered AS (
         SELECT tag_id, building_id, entry_time,
                ROW_NUMBER() OVER (PARTITION BY tag_id ORDER BY entry_time) rn
@@ -68,17 +84,17 @@ async function generateMovementFlowPDF({ day } = {}) {
       ),
       pairs AS (
         SELECT a.tag_id,
-               SUBSTRING(a.building_id::text,1,1) AS from_zone,
-               SUBSTRING(b.building_id::text,1,1) AS to_zone
+               a.building_id AS from_building,
+               b.building_id AS to_building
         FROM ordered a
         JOIN ordered b ON a.tag_id = b.tag_id AND b.rn = a.rn + 1
         WHERE a.building_id IS NOT NULL AND b.building_id IS NOT NULL
       )
-      SELECT from_zone, to_zone, COUNT(*)::int AS transitions
+      SELECT from_building, to_building, COUNT(*)::int AS transitions
       FROM pairs
-      GROUP BY from_zone, to_zone
+      GROUP BY from_building, to_building
       ORDER BY transitions DESC
-      LIMIT 50;
+      LIMIT 200;
     `, params);
 
     const busiestBuildingsRes = await pool.query(`
@@ -91,15 +107,11 @@ async function generateMovementFlowPDF({ day } = {}) {
       LIMIT 50;
     `, params);
 
-    const busiestZonesRes = await pool.query(`
-      SELECT zone, COUNT(DISTINCT tag_id)::int AS unique_visitors
-      FROM (
-        SELECT tag_id, SUBSTRING(building_id::text,1,1) AS zone FROM "EntryExitLog"
-        WHERE building_id IS NOT NULL
-        ${day ? 'AND DATE(entry_time) = $1::date' : ''}
-      ) s
-      GROUP BY zone
-      ORDER BY unique_visitors DESC;
+    const rawZonesRes = await pool.query(`
+      SELECT tag_id, building_id
+      FROM "EntryExitLog"
+      WHERE building_id IS NOT NULL
+      ${day ? 'AND DATE(entry_time) = $1::date' : ''}
     `, params);
 
     const avgBuildingsPerPersonRes = await pool.query(`
@@ -113,10 +125,31 @@ async function generateMovementFlowPDF({ day } = {}) {
 
     // ---- Prepare data ----
     const entryExitSlots = entryExitSlotsRes.rows || [];
-    const transitions = transitionsRes.rows || [];
+
+    // 🔹 Convert transitions to zones
+    const transitions = rawTransitionsRes.rows.map(r => ({
+      from_zone: getZone(r.from_building),
+      to_zone: getZone(r.to_building),
+      transitions: r.transitions
+    }));
+
     const busiestBuildings = busiestBuildingsRes.rows || [];
-    const busiestZones = busiestZonesRes.rows || [];
-    const avgBuildingsPerPerson = avgBuildingsPerPersonRes.rows[0] ? Number(avgBuildingsPerPersonRes.rows[0].avg_buildings) : 0;
+
+    // 🔹 Zone aggregation
+    const zoneCounts = {};
+    for (const row of rawZonesRes.rows) {
+      const z = getZone(row.building_id);
+      if (!zoneCounts[z]) zoneCounts[z] = new Set();
+      zoneCounts[z].add(row.tag_id);
+    }
+    const busiestZones = Object.entries(zoneCounts).map(([zone, set]) => ({
+      zone,
+      unique_visitors: set.size
+    }));
+
+    const avgBuildingsPerPerson = avgBuildingsPerPersonRes.rows[0]
+      ? Number(avgBuildingsPerPersonRes.rows[0].avg_buildings)
+      : 0;
 
     // charts data
     const slotLabels = entryExitSlots.map(r => r.slot);
@@ -187,7 +220,6 @@ async function generateMovementFlowPDF({ day } = {}) {
           options: { indexAxis: "y", responsive: false, plugins: { legend: { display: false } } }
         });
       }
-      // 🔹 HEATMAP skipped here to keep code shorter, unchanged from your version
     } catch (err) {
       console.error("Chart render error:", err);
     }
@@ -231,48 +263,40 @@ async function generateMovementFlowPDF({ day } = {}) {
     if (topBuilding) drawKPI(280, 210, "Top Building", `${topBuilding.dept_name} (${topBuilding.entries})`);
 
     // ---- Entry vs Exit Trends (side by side layout) ----
-if (slotBuffer) {
-  doc.addPage();
-  doc.fontSize(14).fillColor("#0b4b8a")
-    .text("Entry vs Exit Trends (per time slot)", { underline: true });
+    if (slotBuffer) {
+      doc.addPage();
+      doc.fontSize(14).fillColor("#0b4b8a")
+        .text("Entry vs Exit Trends (per time slot)", { underline: true });
 
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const colWidth = pageWidth / 2;
-  const topY = doc.y + 10;
+      const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const colWidth = pageWidth / 2;
+      const topY = doc.y + 10;
 
-  // Chart left
-  doc.image(slotBuffer, doc.page.margins.left, topY, {
-    fit: [colWidth - 20, 250],
-    align: "left"
-  });
+      doc.image(slotBuffer, doc.page.margins.left, topY, { fit: [colWidth - 20, 250], align: "left" });
 
-  // Text right
-  let textX = doc.page.margins.left + colWidth + 10;
-  let textY = topY;
-  doc.fontSize(11).fillColor("#333").text("Slot Values:", textX, textY, { underline: true });
-  textY += 20;
+      let textX = doc.page.margins.left + colWidth + 10;
+      let textY = topY;
+      doc.fontSize(11).fillColor("#333").text("Slot Values:", textX, textY, { underline: true });
+      textY += 20;
 
-  entryExitSlots.forEach(r => {
-    const line = `${r.slot} - Entries: ${r.entries}, Exits: ${r.exits}`;
-    if (textY > topY + 250) {
-      // if the right column overflows, continue under chart
-      textX = doc.page.margins.left;
-      textY = topY + 270;
+      entryExitSlots.forEach(r => {
+        const line = `${r.slot} - Entries: ${r.entries}, Exits: ${r.exits}`;
+        if (textY > topY + 250) {
+          textX = doc.page.margins.left;
+          textY = topY + 270;
+        }
+        doc.text(line, textX, textY, { width: colWidth - 20 });
+        textY += 15;
+      });
+
+      const blockBottom = Math.max(topY + 250, textY);
+      doc.fontSize(10).fillColor("#555").text(
+        "Counts are grouped into 3-hour slots.",
+        doc.page.margins.left,
+        blockBottom + 10,
+        { align: "center", width: pageWidth }
+      );
     }
-    doc.text(line, textX, textY, { width: colWidth - 20 });
-    textY += 15;
-  });
-
-  //  Caption placed below whole block
-  const blockBottom = Math.max(topY + 250, textY);
-  doc.fontSize(10).fillColor("#555").text(
-    "Counts are grouped into 3-hour slots.",
-    doc.page.margins.left,
-    blockBottom + 10,
-    { align: "center", width: pageWidth }
-  );
-}
-
 
     // ---- Busiest Buildings (side by side layout) ----
     if (busiestBuffer) {

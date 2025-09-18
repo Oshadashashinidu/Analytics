@@ -1,17 +1,17 @@
-// user-service/db.js
-const { Pool } = require('pg');
-require('dotenv').config();
+// utils/dbLocal.js
+const { Pool } = require("pg");
+require("dotenv").config();
 
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'organizer_dashboard',
-  password: process.env.DB_PASSWORD || 'xxxx',
-  port: process.env.DB_PORT || 5432,
+const localPool = new Pool({
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME,
 });
 
-pool.on('connect', () => {
-  console.log('Connected to PostgreSQL database');
+localPool.on("connect", () => {
+  console.log(" Connected to LOCAL PostgreSQL database");
 });
 
-module.exports = pool;
+module.exports = localPool;
