@@ -11,16 +11,23 @@ const useSSL = sslEnv
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: useSSL ? { rejectUnauthorized: false } : false,
+
+  // Add pool tuning for Supabase (prevents connection leaks / crashes)
+  max: 10,                 // limit number of clients
+  idleTimeoutMillis: 30000, // close idle clients after 30s
+  connectionTimeoutMillis: 10000, // fail fast if cannot connect
+  keepAlive: true           // keep connections alive
 });
 
 pool.on('connect', () => {
-  console.log(' Connected to Supabase PostgreSQL database');
+  console.log('✅ Connected to Supabase PostgreSQL database');
 });
 
-// Optional: capture unexpected errors
+// Handle unexpected errors gracefully
 pool.on('error', (err) => {
-  console.error('Unexpected DB error:', err);
-  process.exit(-1);
+  console.error('❌ Unexpected DB error:', err);
+  // Instead of killing the whole process, just log it.
+  // process.exit(-1);  <-- remove this (it causes your server to crash)
 });
 
 module.exports = pool;
