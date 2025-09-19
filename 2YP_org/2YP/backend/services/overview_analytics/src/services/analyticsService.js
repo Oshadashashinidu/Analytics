@@ -1,7 +1,7 @@
 const db = require("../utils/db");
 
 // 1. Total visitors (count_per_day)
-async function getTotalVisitors(buildingId, date) {
+async function getTotalVisitors(buildingId) {
   let query, params;
   if (buildingId) {
     query = `SELECT dept_name, count_per_day AS total_visitors 
@@ -17,7 +17,7 @@ async function getTotalVisitors(buildingId, date) {
 }
 
 // 2. Total check-ins (real-time visitors, total_count)
-async function getTotalCheckIns(buildingId, date) {
+async function getTotalCheckIns(buildingId) {
   let query, params;
   if (buildingId) {
     query = `SELECT dept_name, total_count AS total_checkins 
@@ -32,16 +32,15 @@ async function getTotalCheckIns(buildingId, date) {
   return rows[0];
 }
 
-// 3. Average duration (unchanged, still uses EntryExitLog)
-async function getAverageDuration(buildingId, date, slot) {
+// 3. Average duration (logs only)
+async function getAverageDuration(buildingId, slot) {
   const query = `
     SELECT EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60 AS duration
     FROM "EntryExitLog"
     WHERE building_id = $1 
-      AND DATE(entry_time) = $2
       AND exit_time IS NOT NULL
   `;
-  const { rows } = await db.query(query, [buildingId, date]);
+  const { rows } = await db.query(query, [buildingId]);
   if (rows.length === 0) return { averageDuration: 0 };
 
   const avg =
@@ -50,22 +49,22 @@ async function getAverageDuration(buildingId, date, slot) {
   return { averageDuration: Math.round(avg) };
 }
 
-// 4. Repeat visitors (unchanged, still uses EntryExitLog)
-async function getRepeatVisitors(buildingId, date, slot) {
+// 4. Repeat visitors (logs only)
+async function getRepeatVisitors(buildingId, slot) {
   const query = `
     SELECT tag_id, COUNT(*) AS visits
     FROM "EntryExitLog"
-    WHERE building_id = $1 AND DATE(entry_time) = $2
+    WHERE building_id = $1
     GROUP BY tag_id
   `;
-  const { rows } = await db.query(query, [buildingId, date]);
+  const { rows } = await db.query(query, [buildingId]);
 
   const repeatVisitors = rows.filter(r => Number(r.visits) > 1).length;
   return { repeatVisitors };
 }
 
-// 5. Top 3 buildings (count_per_day)
-async function getTop3Buildings(date) {
+// 5. Top 3 buildings
+async function getTop3Buildings() {
   const query = `
     SELECT dept_name AS building, count_per_day AS visitors
     FROM "BUILDING"
@@ -76,8 +75,8 @@ async function getTop3Buildings(date) {
   return rows;
 }
 
-// 6. Top 10 buildings (count_per_day)
-async function getVisitorsPerBuilding(date) {
+// 6. Top 10 buildings
+async function getVisitorsPerBuilding() {
   const query = `
     SELECT dept_name AS building, count_per_day AS total_visitors
     FROM "BUILDING"

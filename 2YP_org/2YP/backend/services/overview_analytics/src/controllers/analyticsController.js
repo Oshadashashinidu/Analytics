@@ -3,8 +3,8 @@ const analyticsService = require("../services/analyticsService");
 // 1. Total visitors in a building (count_per_day)
 async function getTotalVisitors(req, res) {
   try {
-    const { buildingId, date } = req.query;
-    const data = await analyticsService.getTotalVisitors(buildingId, date);
+    const { buildingId } = req.query;   // removed date
+    const data = await analyticsService.getTotalVisitors(buildingId);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -15,8 +15,8 @@ async function getTotalVisitors(req, res) {
 // 2. Total check-ins (real-time visitors in a building right now)
 async function getTotalCheckIns(req, res) {
   try {
-    const { buildingId, date } = req.query;
-    const data = await analyticsService.getTotalCheckIns(buildingId, date);
+    const { buildingId } = req.query;   // removed date
+    const data = await analyticsService.getTotalCheckIns(buildingId);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -24,11 +24,11 @@ async function getTotalCheckIns(req, res) {
   }
 }
 
-// 3. Average duration (use EntryExitLog  if qr exists)
+// 3. Average duration (use EntryExitLog if qr exists)
 async function getAverageDuration(req, res) {
   try {
-    const { buildingId, date, slot } = req.query;
-    const data = await analyticsService.getAverageDuration(buildingId, date, slot);
+    const { buildingId, slot } = req.query;  // removed date
+    const data = await analyticsService.getAverageDuration(buildingId, slot);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -39,8 +39,8 @@ async function getAverageDuration(req, res) {
 // 4. Repeat visitors (use EntryExitLog if qr exists)
 async function getRepeatVisitors(req, res) {
   try {
-    const { buildingId, date, slot } = req.query;
-    const data = await analyticsService.getRepeatVisitors(buildingId, date, slot);
+    const { buildingId, slot } = req.query;  // removed date
+    const data = await analyticsService.getRepeatVisitors(buildingId, slot);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -48,11 +48,10 @@ async function getRepeatVisitors(req, res) {
   }
 }
 
-// 5. Top 3 buildings ranked by visitors (count_per_day)
+// 5. Top 3 buildings ranked by visitors
 async function getTop3Buildings(req, res) {
   try {
-    const { date } = req.query;
-    const data = await analyticsService.getTop3Buildings(date);
+    const data = await analyticsService.getTop3Buildings();
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -60,11 +59,10 @@ async function getTop3Buildings(req, res) {
   }
 }
 
-// 6. Top 10 buildings ranked by visitors (count_per_day)
+// 6. Top 10 buildings ranked by visitors
 async function getVisitorsPerBuilding(req, res) {
   try {
-    const { date } = req.query;
-    const data = await analyticsService.getVisitorsPerBuilding(date);
+    const data = await analyticsService.getVisitorsPerBuilding();
     res.json(data);
   } catch (err) {
     console.error(err);

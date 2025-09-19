@@ -12,31 +12,32 @@ const router = express.Router();
 
 // API endpoints
 
-// GET total visitors (count_per_day)
-//  http://localhost:5006/analytics/total-visitors?buildingId=B1&date=2025-09-19
+// GET total visitors
+//  http://localhost:5006/analytics/total-visitors?buildingId=B1
 router.get("/total-visitors", getTotalVisitors);
 
-// GET total check-ins (real-time, total_count)
-//  http://localhost:5006/analytics/total-checkins?buildingId=B1&date=2025-09-19
+// GET total check-ins (real-time)
+//  http://localhost:5006/analytics/total-checkins?buildingId=B1
 router.get("/total-checkins", getTotalCheckIns);
 
-// GET average duration (still uses logs)
-//  http://localhost:5006/analytics/avg-duration?buildingId=B1&date=2025-09-19
+// GET average duration
+//  http://localhost:5006/analytics/avg-duration?buildingId=B1
 router.get("/avg-duration", getAverageDuration);
 
-// GET repeat visitors (still uses logs)
-//  http://localhost:5006/analytics/repeat-visitors?buildingId=B1&date=2025-09-19
+// GET repeat visitors
+//  http://localhost:5006/analytics/repeat-visitors?buildingId=B1
 router.get("/repeat-visitors", getRepeatVisitors);
 
 // GET top 3 buildings ranked by visitors
-//  http://localhost:5006/analytics/top3-buildings?date=2025-09-19
+//  http://localhost:5006/analytics/top3-buildings
 router.get("/top3-buildings", getTop3Buildings);
 
 // GET top 10 buildings ranked by visitors
-//  http://localhost:5006/analytics/visitors-per-building?date=2025-09-19
+//  http://localhost:5006/analytics/visitors-per-building
 router.get("/visitors-per-building", getVisitorsPerBuilding);
 
 module.exports = router;
+
 
 
 //api key
