@@ -1,10 +1,10 @@
 const analyticsService = require("../services/analyticsService");
 
-// 1. Total visitors in a building
+// 1. Total visitors in a building (count_per_day)
 async function getTotalVisitors(req, res) {
   try {
-    const { buildingId, date, slot } = req.query;
-    const data = await analyticsService.getTotalVisitors(buildingId, date, slot);
+    const { buildingId, date } = req.query;
+    const data = await analyticsService.getTotalVisitors(buildingId, date);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -12,11 +12,11 @@ async function getTotalVisitors(req, res) {
   }
 }
 
-// 2. Total check-ins
+// 2. Total check-ins (real-time visitors in a building right now)
 async function getTotalCheckIns(req, res) {
   try {
-    const { buildingId, date, slot } = req.query;
-    const data = await analyticsService.getTotalCheckIns(buildingId, date, slot);
+    const { buildingId, date } = req.query;
+    const data = await analyticsService.getTotalCheckIns(buildingId, date);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -24,7 +24,7 @@ async function getTotalCheckIns(req, res) {
   }
 }
 
-// 3. Average duration
+// 3. Average duration (use EntryExitLog  if qr exists)
 async function getAverageDuration(req, res) {
   try {
     const { buildingId, date, slot } = req.query;
@@ -36,7 +36,7 @@ async function getAverageDuration(req, res) {
   }
 }
 
-// 4. Repeat visitors
+// 4. Repeat visitors (use EntryExitLog if qr exists)
 async function getRepeatVisitors(req, res) {
   try {
     const { buildingId, date, slot } = req.query;
@@ -48,22 +48,23 @@ async function getRepeatVisitors(req, res) {
   }
 }
 
-// 5. Top 3 buildings
+// 5. Top 3 buildings ranked by visitors (count_per_day)
 async function getTop3Buildings(req, res) {
   try {
-    const { date, slot } = req.query;
-    const data = await analyticsService.getTop3Buildings(date, slot);
+    const { date } = req.query;
+    const data = await analyticsService.getTop3Buildings(date);
     res.json(data);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch top 3 buildings" });
   }
 }
-// 6. Visitors per building for a slot (bar chart)
+
+// 6. Top 10 buildings ranked by visitors (count_per_day)
 async function getVisitorsPerBuilding(req, res) {
   try {
-    const { date, slot } = req.query;
-    const data = await analyticsService.getVisitorsPerBuilding(date, slot);
+    const { date } = req.query;
+    const data = await analyticsService.getVisitorsPerBuilding(date);
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -71,54 +72,11 @@ async function getVisitorsPerBuilding(req, res) {
   }
 }
 
-
-
-// Visitors Growth
-async function getVisitorsGrowth(req, res) {
-  try {
-    const { buildingId, date, slot } = req.query;
-    const data = await analyticsService.getVisitorsGrowth(buildingId, date, slot);
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch visitors growth" });
-  }
-}
-
-// Check-ins Growth
-async function getCheckInsGrowth(req, res) {
-  try {
-    const { buildingId, date, slot } = req.query;
-    const data = await analyticsService.getCheckInsGrowth(buildingId, date, slot);
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch check-ins growth" });
-  }
-}
-
-// Avg Duration Growth
-async function getAvgDurationGrowth(req, res) {
-  try {
-    const { buildingId, date, slot } = req.query;
-    const data = await analyticsService.getAvgDurationGrowth(buildingId, date, slot);
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch avg duration growth" });
-  }
-}
-
-
-
 module.exports = {
   getTotalVisitors,
   getTotalCheckIns,
   getAverageDuration,
   getRepeatVisitors,
   getTop3Buildings,
-  getVisitorsPerBuilding,
-  getVisitorsGrowth,
-  getCheckInsGrowth,
-  getAvgDurationGrowth
+  getVisitorsPerBuilding
 };

@@ -5,44 +5,42 @@ const {
   getAverageDuration,
   getRepeatVisitors,
   getTop3Buildings,
-  getVisitorsPerBuilding,
-  getVisitorsGrowth,
-  getCheckInsGrowth,
-  getAvgDurationGrowth
+  getVisitorsPerBuilding
 } = require("../controllers/analyticsController");
 
 const router = express.Router();
 
-router.get("/total-visitors", getTotalVisitors);
-router.get("/total-checkins", getTotalCheckIns);
-router.get("/avg-duration", getAverageDuration);
-router.get("/repeat-visitors", getRepeatVisitors);
-router.get("/top3-buildings", getTop3Buildings);
-router.get("/visitors-per-building", getVisitorsPerBuilding);
+// API endpoints
 
-// 3 separate routes
-router.get("/visitors-growth", getVisitorsGrowth);
-router.get("/checkins-growth", getCheckInsGrowth);
-router.get("/avg-duration-growth", getAvgDurationGrowth);
+// GET total visitors (count_per_day)
+//  http://localhost:5006/analytics/total-visitors?buildingId=B1&date=2025-09-19
+router.get("/total-visitors", getTotalVisitors);
+
+// GET total check-ins (real-time, total_count)
+//  http://localhost:5006/analytics/total-checkins?buildingId=B1&date=2025-09-19
+router.get("/total-checkins", getTotalCheckIns);
+
+// GET average duration (still uses logs)
+//  http://localhost:5006/analytics/avg-duration?buildingId=B1&date=2025-09-19
+router.get("/avg-duration", getAverageDuration);
+
+// GET repeat visitors (still uses logs)
+//  http://localhost:5006/analytics/repeat-visitors?buildingId=B1&date=2025-09-19
+router.get("/repeat-visitors", getRepeatVisitors);
+
+// GET top 3 buildings ranked by visitors
+//  http://localhost:5006/analytics/top3-buildings?date=2025-09-19
+router.get("/top3-buildings", getTop3Buildings);
+
+// GET top 10 buildings ranked by visitors
+//  http://localhost:5006/analytics/visitors-per-building?date=2025-09-19
+router.get("/visitors-per-building", getVisitorsPerBuilding);
 
 module.exports = router;
 
-//API endpoints for testing:
 
-//GET http://localhost:5006/analytics/total-visitors?buildingId=B4&date=2025-09-17&slot=2
+//api key
+//eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsY2t6eGJzdWZ3amxzeXh4em96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMTAwODcsImV4cCI6MjA3MzU4NjA4N30.J8MMNsdLQh6dw7QC1pFtWIZsYV5e2S2iRfWD_vWMsPM
 
-//GET http://localhost:5006/analytics/total-checkins?buildingId=B4&date=2025-09-17&slot=2
-
-//GET http://localhost:5006/analytics/avg-duration?buildingId=B4&date=2025-09-17&slot=2
-
-//GET http://localhost:5006/analytics/repeat-visitors?buildingId=B4&date=2025-09-17&slot=2
-
-//GET http://localhost:5006/analytics/top3-buildings?date=2025-09-17&slot=2
-
-//GET http://localhost:5006/analytics/visitors-per-building?date=2025-09-17&slot=2
-
-// visitors Growth:
-// GET http://localhost:5006/analytics/visitors-growth?buildingId=B4&date=2025-09-17&slot=2
-// GET http://localhost:5006/analytics/checkins-growth?buildingId=B4&date=2025-09-17&slot=2
-// GET http://localhost:5006/analytics/avg-duration-growth?buildingId=B4&date=2025-09-17&slot=2
-
+//supabase link
+// https://ulckzxbsufwjlsyxxzoz.supabase.co/rest/v1/BUILDING?select=total_count&building_id=eq

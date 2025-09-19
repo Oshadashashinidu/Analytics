@@ -1,58 +1,47 @@
 const db = require("../utils/db");
 
-// Helper to get slot range
-function getSlotRange(date, slot) {
-  let start, end;
-  if (slot === "1") {
-    start = `${date} 10:00:00`;
-    end = `${date} 13:00:00`;
-  } else if (slot === "2") {
-    start = `${date} 13:00:00`;
-    end = `${date} 16:00:00`;
-  } else if (slot === "3") {
-    start = `${date} 16:00:00`;
-    end = `${date} 19:00:00`;
+// 1. Total visitors (count_per_day)
+async function getTotalVisitors(buildingId, date) {
+  let query, params;
+  if (buildingId) {
+    query = `SELECT dept_name, count_per_day AS total_visitors 
+             FROM "BUILDING" 
+             WHERE building_id = $1`;
+    params = [buildingId];
   } else {
-    throw new Error("Invalid slot. Use 1, 2, or 3.");
+    query = `SELECT SUM(count_per_day) AS total_visitors FROM "BUILDING"`;
+    params = [];
   }
-  return { start, end };
-}
-
-// 1. Total visitors (unique) in a building during a slot
-async function getTotalVisitors(buildingId, date, slot) {
-  const { start, end } = getSlotRange(date, slot);
-  const query = `
-    SELECT COUNT(DISTINCT tag_id) AS total_visitors
-    FROM "EntryExitLog"
-    WHERE building_id = $1 AND entry_time >= $2 AND entry_time < $3
-  `;
-  const { rows } = await db.query(query, [buildingId, start, end]);
+  const { rows } = await db.query(query, params);
   return rows[0];
 }
 
-// 2. Total check-ins (all entries) in a building during a slot
-async function getTotalCheckIns(buildingId, date, slot) {
-  const { start, end } = getSlotRange(date, slot);
-  const query = `
-    SELECT COUNT(*) AS total_checkins
-    FROM "EntryExitLog"
-    WHERE building_id = $1 AND entry_time >= $2 AND entry_time < $3
-  `;
-  const { rows } = await db.query(query, [buildingId, start, end]);
+// 2. Total check-ins (real-time visitors, total_count)
+async function getTotalCheckIns(buildingId, date) {
+  let query, params;
+  if (buildingId) {
+    query = `SELECT dept_name, total_count AS total_checkins 
+             FROM "BUILDING" 
+             WHERE building_id = $1`;
+    params = [buildingId];
+  } else {
+    query = `SELECT SUM(total_count) AS total_checkins FROM "BUILDING"`;
+    params = [];
+  }
+  const { rows } = await db.query(query, params);
   return rows[0];
 }
 
-// 3. Average duration in a building during a slot
+// 3. Average duration (unchanged, still uses EntryExitLog)
 async function getAverageDuration(buildingId, date, slot) {
-  const { start, end } = getSlotRange(date, slot);
   const query = `
     SELECT EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60 AS duration
     FROM "EntryExitLog"
     WHERE building_id = $1 
-      AND entry_time >= $2 AND entry_time < $3
+      AND DATE(entry_time) = $2
       AND exit_time IS NOT NULL
   `;
-  const { rows } = await db.query(query, [buildingId, start, end]);
+  const { rows } = await db.query(query, [buildingId, date]);
   if (rows.length === 0) return { averageDuration: 0 };
 
   const avg =
@@ -61,195 +50,43 @@ async function getAverageDuration(buildingId, date, slot) {
   return { averageDuration: Math.round(avg) };
 }
 
-// 4. Repeat visitors in a building during a slot
+// 4. Repeat visitors (unchanged, still uses EntryExitLog)
 async function getRepeatVisitors(buildingId, date, slot) {
-  const { start, end } = getSlotRange(date, slot);
   const query = `
     SELECT tag_id, COUNT(*) AS visits
     FROM "EntryExitLog"
-    WHERE building_id = $1 AND entry_time >= $2 AND entry_time < $3
+    WHERE building_id = $1 AND DATE(entry_time) = $2
     GROUP BY tag_id
   `;
-  const { rows } = await db.query(query, [buildingId, start, end]);
+  const { rows } = await db.query(query, [buildingId, date]);
 
-  const totalVisitors = rows.length;
   const repeatVisitors = rows.filter(r => Number(r.visits) > 1).length;
-
-  return {
-       repeatVisitors
-  };
+  return { repeatVisitors };
 }
 
-// 5. Top 3 buildings during a slot
-async function getTop3Buildings(date, slot) {
-  const { start, end } = getSlotRange(date, slot);
-
+// 5. Top 3 buildings (count_per_day)
+async function getTop3Buildings(date) {
   const query = `
-    SELECT 
-      b.dept_name AS building,
-      COUNT(DISTINCT e.tag_id) AS visitors
-    FROM "BUILDING" b
-    LEFT JOIN "EntryExitLog" e 
-      ON e.building_id = b.building_id
-      AND e.entry_time >= $1 
-      AND e.entry_time < $2
-    GROUP BY b.dept_name
-    ORDER BY visitors DESC, b.dept_name ASC
+    SELECT dept_name AS building, count_per_day AS visitors
+    FROM "BUILDING"
+    ORDER BY count_per_day DESC, dept_name ASC
     LIMIT 3
   `;
-
-  const { rows } = await db.query(query, [start, end]);
+  const { rows } = await db.query(query);
   return rows;
 }
 
-
-// 6. Total visitors per building for a time slot (for bar chart)
-async function getVisitorsPerBuilding(date, slot) {
-  const { start, end } = getSlotRange(date, slot);
-
+// 6. Top 10 buildings (count_per_day)
+async function getVisitorsPerBuilding(date) {
   const query = `
-    WITH visitor_counts AS (
-      SELECT 
-        b.dept_name AS building,
-        COUNT(DISTINCT e.tag_id) AS total_visitors
-      FROM "BUILDING" b
-      LEFT JOIN "EntryExitLog" e 
-        ON e.building_id = b.building_id
-        AND e.entry_time >= $1 
-        AND e.entry_time < $2
-      GROUP BY b.dept_name
-    ),
-    top_visited AS (
-      SELECT *
-      FROM visitor_counts
-      ORDER BY total_visitors DESC, building ASC
-      LIMIT 10
-    ),
-    filler AS (
-      SELECT vc.building, vc.total_visitors
-      FROM visitor_counts vc
-      WHERE vc.total_visitors = 0
-        AND vc.building NOT IN (SELECT building FROM top_visited)
-      ORDER BY vc.building ASC
-      LIMIT (10 - (SELECT COUNT(*) FROM top_visited))
-    )
-    SELECT * FROM top_visited
-    UNION ALL
-    SELECT * FROM filler
-    LIMIT 10;
+    SELECT dept_name AS building, count_per_day AS total_visitors
+    FROM "BUILDING"
+    ORDER BY count_per_day DESC, dept_name ASC
+    LIMIT 10
   `;
-
-  const { rows } = await db.query(query, [start, end]);
+  const { rows } = await db.query(query);
   return rows;
 }
-
-
-
-
-
-
-
-// Helper
-function calculatePercentageChange(current, previous) {
-  if (previous === 0) return current > 0 ? 100 : 0;
-  return ((current - previous) / previous * 100).toFixed(2);
-}
-
-function getSlotRange(date, slot) {
-  let start, end;
-  if (slot === "1") {
-    start = `${date} 10:00:00`;
-    end = `${date} 13:00:00`;
-  } else if (slot === "2") {
-    start = `${date} 13:00:00`;
-    end = `${date} 16:00:00`;
-  } else if (slot === "3") {
-    start = `${date} 16:00:00`;
-    end = `${date} 19:00:00`;
-  } else {
-    throw new Error("Invalid slot. Use 1, 2, or 3.");
-  }
-  return { start, end };
-}
-
-// 1. Visitors Growth %
-async function getVisitorsGrowth(buildingId, date, slot) {
-  const { start, end } = getSlotRange(date, slot);
-
-  const q = `
-    SELECT COUNT(DISTINCT tag_id) AS total_visitors
-    FROM "EntryExitLog"
-    WHERE building_id = $1 AND entry_time >= $2 AND entry_time < $3
-  `;
-  const { rows: cRows } = await db.query(q, [buildingId, start, end]);
-  const current = Number(cRows[0].total_visitors);
-
-  const prevSlot = (Number(slot) - 1).toString();
-  if (prevSlot === "0") return { current, growth: 0 };
-
-  const { start: ps, end: pe } = getSlotRange(date, prevSlot);
-  const { rows: pRows } = await db.query(q, [buildingId, ps, pe]);
-  const previous = Number(pRows[0].total_visitors);
-
-  return { growth: calculatePercentageChange(current, previous) };
-}
-
-// 2. Check-ins Growth %
-async function getCheckInsGrowth(buildingId, date, slot) {
-  const { start, end } = getSlotRange(date, slot);
-
-  const q = `
-    SELECT COUNT(*) AS total_checkins
-    FROM "EntryExitLog"
-    WHERE building_id = $1 AND entry_time >= $2 AND entry_time < $3
-  `;
-  const { rows: cRows } = await db.query(q, [buildingId, start, end]);
-  const current = Number(cRows[0].total_checkins);
-
-  const prevSlot = (Number(slot) - 1).toString();
-  if (prevSlot === "0") return { current, growth: 0 };
-
-  const { start: ps, end: pe } = getSlotRange(date, prevSlot);
-  const { rows: pRows } = await db.query(q, [buildingId, ps, pe]);
-  const previous = Number(pRows[0].total_checkins);
-
-  return { growth: calculatePercentageChange(current, previous) };
-}
-
-// 3. Avg Duration Growth %
-async function getAvgDurationGrowth(buildingId, date, slot) {
-  const { start, end } = getSlotRange(date, slot);
-
-  const q = `
-    SELECT EXTRACT(EPOCH FROM (exit_time - entry_time)) / 60 AS duration
-    FROM "EntryExitLog"
-    WHERE building_id = $1 
-      AND entry_time >= $2 AND entry_time < $3
-      AND exit_time IS NOT NULL
-  `;
-  const { rows: cRows } = await db.query(q, [buildingId, start, end]);
-  let current = 0;
-  if (cRows.length > 0) {
-    current = cRows.reduce((s, r) => s + Number(r.duration), 0) / cRows.length;
-  }
-
-  const prevSlot = (Number(slot) - 1).toString();
-  if (prevSlot === "0") return { current: Math.round(current), growth: 0 };
-
-  const { start: ps, end: pe } = getSlotRange(date, prevSlot);
-  const { rows: pRows } = await db.query(q, [buildingId, ps, pe]);
-  let previous = 0;
-  if (pRows.length > 0) {
-    previous = pRows.reduce((s, r) => s + Number(r.duration), 0) / pRows.length;
-  }
-
-  return {
-
-    growth: calculatePercentageChange(current, previous)
-  };
-}
-
-
 
 module.exports = {
   getTotalVisitors,
@@ -257,9 +94,5 @@ module.exports = {
   getAverageDuration,
   getRepeatVisitors,
   getTop3Buildings,
-  getVisitorsPerBuilding,
-   getVisitorsGrowth,
-  getCheckInsGrowth,
-  getAvgDurationGrowth
-
+  getVisitorsPerBuilding
 };
