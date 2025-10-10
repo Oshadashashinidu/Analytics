@@ -1,7 +1,7 @@
 // src/index.js
 const express = require("express");
 const axios = require("axios");
-const pool = require("../../../db/db"); // path to your db.js
+const pool = require("../../../db/db");
 require("dotenv").config();
 
 const app = express();
@@ -9,10 +9,10 @@ const PORT = process.env.PORT || 5010;
 
 // Default route
 app.get("/", (req, res) => {
-  res.send("✅ Feedback service is running. Use /feedback to get data.");
+  res.send("✅ Feedback service is running. Use /feedback endpoints.");
 });
 
-// Helper: get building + zone by location name
+// Helper: get building + zone by location
 async function getBuildingByLocation(location) {
   const query = `
     SELECT b.building_name, z.zone_name
@@ -25,7 +25,7 @@ async function getBuildingByLocation(location) {
   return result.rows[0] || { building_name: "Unknown Building", zone_name: "Unknown Zone" };
 }
 
-// 🔹 Endpoint: get feedback with event + building + satisfaction_rate
+// 🔹 /feedback - all feedbacks with details
 app.get("/feedback", async (req, res) => {
   try {
     const response = await axios.get("http://localhost:3000");
@@ -41,7 +41,6 @@ app.get("/feedback", async (req, res) => {
           rating = parsed.rating || null;
         } catch (e) {}
 
-        // get event details from your database
         const eventQuery = "SELECT event_ID, event_name, location FROM Events WHERE event_ID = $1";
         const eventResult = await pool.query(eventQuery, [row.event_id]);
         const event = eventResult.rows[0] || { event_name: "Unknown Event", location: null };
@@ -61,28 +60,17 @@ app.get("/feedback", async (req, res) => {
       })
     );
 
-    // calculate satisfaction rate (global)
-    const total = feedbackWithDetails.length;
-    const positive = feedbackWithDetails.filter(f => f.rating >= 4).length;
-    const satisfactionRate = total > 0 ? (positive / total) * 100 : 0;
-
-    const finalResult = feedbackWithDetails.map(item => ({
-      ...item,
-      satisfaction_rate: satisfactionRate.toFixed(2) + "%"
-    }));
-
-    res.json(finalResult);
+    res.json(feedbackWithDetails);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Failed to fetch feedback" });
   }
 });
 
-// 🔹 Endpoint: filter feedback by sentiment + zone + building
+// 🔹 /feedback/filter - filter by sentiment, zone, or building
 app.get("/feedback/filter", async (req, res) => {
   try {
     const { sentiment, zone, building } = req.query;
-
     const response = await axios.get("http://localhost:3000");
     const rows = response.data.sampleRows;
 
@@ -117,17 +105,13 @@ app.get("/feedback/filter", async (req, res) => {
 
     let filtered = feedbackWithDetails;
 
-    // filter by sentiment
     if (sentiment) {
       if (sentiment === "positive") filtered = filtered.filter(r => r.rating >= 4);
       else if (sentiment === "neutral") filtered = filtered.filter(r => r.rating === 3);
       else if (sentiment === "negative") filtered = filtered.filter(r => r.rating <= 2);
     }
 
-    // filter by zone
     if (zone) filtered = filtered.filter(r => r.zone.toLowerCase() === zone.toLowerCase());
-
-    // filter by building
     if (building) filtered = filtered.filter(r => r.building.toLowerCase() === building.toLowerCase());
 
     res.json(filtered);
@@ -137,44 +121,71 @@ app.get("/feedback/filter", async (req, res) => {
   }
 });
 
-// 🔹 Endpoint: satisfaction rate only
+// 🔹 /feedback/satisfaction?event_id=E01  -> Satisfaction for one event
 app.get("/feedback/satisfaction", async (req, res) => {
   try {
-    const response = await axios.get("http://localhost:3000");
-    const rows = response.data.sampleRows;
+    const { event_id } = req.query;
 
-    const feedback = rows.map(row => {
-      let rating = null;
+    if (!event_id) {
+      return res.status(400).json({ error: "Missing event_id parameter" });
+    }
+
+    // Fetch feedback from your ML API
+    const response = await axios.get("http://localhost:3000");
+    const rows = response.data.sampleRows.filter(
+      r => String(r.event_id) === String(event_id)
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: `No feedback found for event_id ${event_id}` });
+    }
+
+    // Extract ratings
+    const ratings = [];
+    for (const row of rows) {
       try {
         const parsed = JSON.parse(row.text_content);
-        rating = parsed.rating || null;
+        if (parsed.rating !== undefined && parsed.rating !== null) {
+          ratings.push(parsed.rating);
+        }
       } catch (e) {}
-      return { rating };
-    });
+    }
 
-    const total = feedback.length;
-    const positive = feedback.filter(f => f.rating >= 4).length;
+    const total = ratings.length;
+    const positive = ratings.filter(r => r >= 4).length;
     const satisfactionRate = total > 0 ? (positive / total) * 100 : 0;
 
-    res.json({ satisfaction_rate: satisfactionRate.toFixed(2) + "%" });
+    // Fetch event + building + zone details
+    const eventQuery = "SELECT event_ID, event_name, location FROM Events WHERE event_ID = $1";
+    const eventResult = await pool.query(eventQuery, [event_id]);
+    const event = eventResult.rows[0] || { event_name: "Unknown Event", location: null };
+
+    const buildingData = event.location
+      ? await getBuildingByLocation(event.location)
+      : { building_name: "Unknown Building", zone_name: "Unknown Zone" };
+
+    res.json({
+      event_id,
+      event_name: event.event_name,
+      building: buildingData.building_name,
+      zone: buildingData.zone_name,
+      satisfaction_rate: satisfactionRate.toFixed(2) + "%"
+    });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Failed to calculate satisfaction rate" });
   }
 });
 
-// 🔹 NEW ENDPOINT: event ranking by average rating
+// 🔹 /feedback/rank?rank=1 -> rank events by average rating
 app.get("/feedback/rank", async (req, res) => {
   try {
-    const { rank } = req.query; // e.g., rank=1 or rank=3
+    const { rank } = req.query;
     const rankNumber = parseInt(rank) || 1;
-
     const response = await axios.get("http://localhost:3000");
     const rows = response.data.sampleRows;
 
-    // Step 1: Group ratings by event_id
     const eventRatings = {};
-
     for (const row of rows) {
       try {
         const parsed = JSON.parse(row.text_content);
@@ -186,17 +197,14 @@ app.get("/feedback/rank", async (req, res) => {
       } catch (e) {}
     }
 
-    // Step 2: Calculate average rating per event
     const eventAverages = [];
     for (const [event_id, ratings] of Object.entries(eventRatings)) {
       const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
 
-      // Get event info
       const eventQuery = "SELECT event_ID, event_name, location FROM Events WHERE event_ID = $1";
       const eventResult = await pool.query(eventQuery, [event_id]);
       const event = eventResult.rows[0] || { event_name: "Unknown Event", location: null };
 
-      // Get building + zone
       const buildingData = event.location
         ? await getBuildingByLocation(event.location)
         : { building_name: "Unknown Building", zone_name: "Unknown Zone" };
@@ -210,10 +218,8 @@ app.get("/feedback/rank", async (req, res) => {
       });
     }
 
-    // Step 3: Sort by average rating (descending)
     eventAverages.sort((a, b) => b.average_rating - a.average_rating);
 
-    // Step 4: Assign ranks (handle ties)
     let currentRank = 1;
     let lastRating = null;
     eventAverages.forEach((event, index) => {
@@ -225,22 +231,16 @@ app.get("/feedback/rank", async (req, res) => {
         event.rank = currentRank;
         lastRating = event.average_rating;
       } else {
-        event.rank = currentRank; // same rank if same rating
+        event.rank = currentRank;
       }
     });
 
-    // Step 5: Filter by rank if requested
     const filtered = eventAverages.filter(e => e.rank === rankNumber);
-
     if (filtered.length === 0) {
       return res.status(404).json({ message: `No events found for rank ${rankNumber}` });
     }
 
-    res.json({
-      rank: rankNumber,
-      events: filtered,
-    });
-
+    res.json({ rank: rankNumber, events: filtered });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Failed to calculate event rankings" });
